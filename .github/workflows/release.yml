@@ -1,0 +1,216 @@
+# 云端打包并发布 Release：在 GitHub Actions 的 windows runner 上跑与本地同一套
+# `node scripts/package-win.mjs <组合>`（改的是运行位置，不是构建逻辑）。
+#
+# 触发方式（二选一）：
+#   1. Actions 页面手动 Run workflow，填版本号（留空则用 package.json 里的）
+#   2. 本地 npm version 1.2.0 && git push origin v1.2.0
+#
+# 前置条件（只需做一次，各传一个常驻 Release）：
+#   - Win7 前置补丁（4 个 .msu × 2 架构，仓库里没有，已 gitignore）：
+#       gh release create win7-patches --title "Win7 前置补丁源" --notes "CI 构建时按架构取用,勿删" win7-patches/*.msu
+#   - WebView2 109 固定版运行时（Win7 最后受支持的版本）：
+#       gh release create webview2-109 --title "WebView2 109 固定版运行时源" --notes "CI 构建时按架构取用,勿删" Microsoft.WebView2.FixedVersionRuntime.109.*.x86.cab Microsoft.WebView2.FixedVersionRuntime.109.*.x64.cab
+#
+# 取不到补丁或运行时，CI 一律**硬失败**而不是继续 —— 静默产出一个跑不起来的 Win7 包
+# 危险得多（缺补丁会在老系统上起不来，缺运行时则直接打不开窗口）。
+
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号(留空则用 package.json 里的)。例:1.2.0'
+        required: false
+        type: string
+      publish:
+        description: '是否创建 GitHub Release(false = 只构建,用于验证流水线)'
+        required: false
+        default: true
+        type: boolean
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+# 各架构并行；bash 让 Windows runner 与 ubuntu 的 release job 用同一套脚本写法
+defaults:
+  run:
+    shell: bash
+
+env:
+  PATCHES_TAG: win7-patches
+  RUNTIME_TAG: webview2-109
+
+jobs:
+  build:
+    name: 打包 ${{ matrix.combo }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        combo: [win7-ia32, win7-x64, win10-ia32, win10-x64]
+    steps:
+      - uses: actions/checkout@v4
+
+      # 项目固定 Rust 1.77.2（Win7 上官方 target 支持的最后版本，见 README）；依赖解析已由
+      # 仓库根的 .cargo/config.toml 按 rust-version 回退，Cargo.lock 已提交，构建一律 --locked
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.77.2
+          targets: i686-pc-windows-msvc, x86_64-pc-windows-msvc
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.combo }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 对齐版本号
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          [ -n "$VERSION" ] || VERSION="$(node -p "require('./package.json').version")"
+          echo "构建版本:$VERSION"
+          # 产物文件名内嵌版本号：同步写进 package.json 与 src-tauri/tauri.conf.json
+          node scripts/sync-version.mjs "$VERSION"
+
+      # GH_TOKEN 必须有：仓库虽公开，但 gh CLI 无凭据时连下载都会报
+      # "could not find any host configurations"。取不到就硬失败。
+      - name: 取 Win7 前置补丁
+        if: startsWith(matrix.combo, 'win7-')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ARCH_TOKEN=x86; case "${{ matrix.combo }}" in *-x64) ARCH_TOKEN=x64;; esac
+          mkdir -p win7-patches
+          if ! gh release download "$PATCHES_TAG" --pattern "*${ARCH_TOKEN}*.msu" --dir win7-patches --clobber; then
+            echo "::error::取不到 $PATCHES_TAG Release 的 ${ARCH_TOKEN} 补丁。一次性准备:gh release create $PATCHES_TAG --title 'Win7 前置补丁源' --notes 'CI 构建时按架构取用,勿删' win7-patches/*.msu"
+            exit 1
+          fi
+          N=$(ls win7-patches/*.msu | wc -l)
+          echo "已取补丁:$N 个(${ARCH_TOKEN})"
+          if [ "$N" -ne 4 ]; then
+            echo "::error::预期 4 个 .msu,实际 $N 个 —— 补丁源不完整,拒绝产出裸包"
+            ls -l win7-patches
+            exit 1
+          fi
+
+      - name: 取 WebView2 109 固定版运行时
+        if: startsWith(matrix.combo, 'win7-')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p webview2-109
+          # 种子 Release 里放的是 .cab（微软官方）或 .nupkg（NuGet 镜像包），两种都收
+          if ! gh release download "$RUNTIME_TAG" --pattern "*.cab" --dir webview2-109 --clobber 2>/dev/null; then
+            if ! gh release download "$RUNTIME_TAG" --pattern "*.nupkg" --dir webview2-109 --clobber; then
+              echo "::error::取不到 $RUNTIME_TAG Release 的运行时压缩包。一次性准备:gh release create $RUNTIME_TAG --title 'WebView2 109 固定版运行时源' --notes 'CI 构建时按架构取用,勿删' *.cab *.nupkg"
+              exit 1
+            fi
+          fi
+          ls -l webview2-109
+          node scripts/fetch-webview2-runtime.mjs
+
+      # package-win.mjs 内部：版本一致性校验 → npm run build → tauri build(NSIS) →
+      # 重命名产物 → 组绿色版 zip → Win7 复制补丁与《安装说明.txt》
+      - name: 打包
+        run: node scripts/package-win.mjs ${{ matrix.combo }}
+
+      - name: 定位分发目录
+        id: locate
+        run: |
+          set -euo pipefail
+          case "${{ matrix.combo }}" in
+            win7-ia32)  LABEL="Win7-32位" ;;
+            win7-x64)   LABEL="Win7-64位" ;;
+            win10-ia32) LABEL="Win10-32位" ;;
+            win10-x64)  LABEL="Win10-64位" ;;
+          esac
+          [ -d "release/$LABEL" ] || { echo "::error::分发目录 release/$LABEL 不存在"; exit 1; }
+          echo "label=$LABEL" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pkg-${{ matrix.combo }}
+          path: release/${{ steps.locate.outputs.label }}/
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: 发布 GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      # 必须 checkout：创建 Release 那步要从 package.json 读版本号来拼 tag
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: pkg-*
+          path: release
+
+      # 摊平成单个资产目录。只收 mini-todo-*.exe / mini-todo-*.zip 与 前置补丁/ 下的 .msu，
+      # 避免把暂存目录混进资产。
+      #
+      # 资产名必须是 ASCII：gh release create 会把非 ASCII 文件名压成 "default.txt"。
+      # 本地分发目录里仍用中文名，只在这里改成 ASCII —— 内容不变。
+      - name: 汇总产物
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          find release -name 'mini-todo-*.exe' -exec cp {} dist/ \;
+          find release -name 'mini-todo-*.zip' -exec cp {} dist/ \;
+          find release -name '*.msu'            -exec cp {} dist/ \;
+          find release -name '安装说明.txt' | sort | head -1 | xargs -r -I{} cp {} dist/win7-patches-readme.txt
+          echo "--- 资产清单 ---"
+          ls -lh dist
+          # 4 个安装版 exe + 4 个绿色版 zip + 8 个 msu(两个 Win7 架构各 4 个)
+          # + 1 份说明(两个 Win7 架构同名,只取一份)= 17
+          N=$(ls dist | wc -l)
+          [ "$N" -eq 17 ] || { echo "::error::预期 17 个资产(4 exe + 4 zip + 8 msu + 1 说明),实际 $N"; exit 1; }
+          if ls dist | grep -qP '[^\x20-\x7e]'; then
+            echo "::error::存在非 ASCII 资产名,上传后会被 gh 压成 default.txt"
+            ls dist
+            exit 1
+          fi
+
+      - name: 创建 Release
+        if: ${{ github.event_name == 'push' || inputs.publish }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="v${VERSION}"
+          if [ "${{ github.event_name }}" = "push" ] && [ "$GITHUB_REF_NAME" != "$TAG" ]; then
+            echo "::error::tag $GITHUB_REF_NAME 与 package.json 版本 $VERSION 不一致,拒绝发布"
+            exit 1
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "删除已存在的 $TAG 以便重跑"
+            gh release delete "$TAG" --yes --cleanup-tag
+          fi
+          gh release create "$TAG" dist/* \
+            --title "迷你待办 ${VERSION}" \
+            --notes "Rust/Tauri 重写版。四架构安装版 + 绿色版,共 17 个资产 = 4 个安装版 exe + 4 个绿色版 zip + 8 个 .msu(两个 Win7 架构各 4 个)+ 1 份说明。**两种分发物**:安装版双击 exe 走安装向导(装到当前用户目录);绿色版是 zip,解压到任意文件夹后双击里面的 exe 即可,不必安装(zip 无外层目录,建议先建一个专用文件夹再解压)。**Win7 用户**:先下载 win7-patches-readme.txt 看补丁安装顺序,按里面的顺序装完 4 个 .msu(先 KB4490628 再 KB4474419),再运行安装包或绿色版;Win7 包已内置 WebView2 109 运行时,无需联网。**Win10 及以上**:系统自带 WebView2 运行时,不需要补补丁,直接跑 exe。" \
+            --latest
+          echo "已发布:$TAG"
+
+      - name: 汇总产物(未发布)
+        if: ${{ github.event_name != 'push' && !inputs.publish }}
+        run: echo "publish=false,只构建不发布。产物见 dist/"
