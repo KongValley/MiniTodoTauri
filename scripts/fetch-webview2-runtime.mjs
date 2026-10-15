@@ -20,6 +20,11 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const cabDir = join(root, 'webview2-109')
+const SYS = process.env.SystemRoot || 'C:\\Windows'
+// 必须用 System32 里的 bsdtar/expand 绝对路径：CI 的 PATH 里 Git 自带 GNU tar 在前，
+// 它会把 "D:\..." 当远程主机（tar: Cannot connect to D: resolve failed）。
+const BSDTAR = join(SYS, 'System32', 'tar.exe')
+const EXPAND = join(SYS, 'System32', 'expand.exe')
 
 function log(msg) {
   console.log(`[webview2] ${msg}`)
@@ -55,10 +60,17 @@ function extractArchive(archive, outDir) {
   rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
   if (archive.toLowerCase().endsWith('.cab')) {
-    execFileSync('expand.exe', [archive, '-F:*', outDir], { stdio: 'inherit' })
+    execFileSync(EXPAND, [archive, '-F:*', outDir], { stdio: 'inherit' })
+  } else if (existsSync(BSDTAR)) {
+    // nupkg 就是 zip，用 Windows 自带 bsdtar 解（绝对路径，绕开 Git 的 GNU tar）
+    execFileSync(BSDTAR, ['-xf', archive, '-C', outDir], { stdio: 'inherit' })
   } else {
-    // nupkg 就是 zip，用系统自带 bsdtar 解
-    execFileSync('tar.exe', ['-xf', archive, '-C', outDir], { stdio: 'inherit' })
+    // 兜底：PowerShell 的 Expand-Archive（能解 nupkg/zip，路径语义按 Windows 处理）
+    execFileSync(
+      'powershell',
+      ['-NoProfile', '-Command', `Expand-Archive -LiteralPath '${archive}' -DestinationPath '${outDir}' -Force`],
+      { stdio: 'inherit' }
+    )
   }
   // 压缩包内可能带一层版本目录，抹平到根（应用按 exe 同目录的 webview2-runtime/ 找文件）
   const entries = readdirSync(outDir)
