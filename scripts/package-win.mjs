@@ -131,16 +131,12 @@ cpSync(join(root, cfg.runtime), join(staging, 'webview2-runtime'), { recursive: 
 const zipName = `mini-todo-portable-${pkg.version}-${combo}.zip`
 const zipPath = join(outDir, zipName)
 rmSync(zipPath, { force: true })
-// 绿色版要压 ~200MB（含运行时），用系统自带 bsdtar：比 PowerShell Compress-Archive 快数倍
-const BSDTAR = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
-if (existsSync(BSDTAR)) {
-  execFileSync(BSDTAR, ['-a', '-cf', zipPath, '-C', staging, ...readdirSync(staging)], { stdio: 'inherit' })
-} else {
-  execSync(
-    `powershell -NoProfile -Command "Compress-Archive -Path '${join(staging, '*')}' -DestinationPath '${zipPath}' -Force"`,
-    { cwd: root, stdio: 'inherit' }
-  )
-}
+// 用 PowerShell Compress-Archive，不用 bsdtar：bsdtar 在非中文 ANSI 代码页的机器（如 CI runner）
+// 处理不了中文路径（release/Win7-32位/… 会被转成 Win7-32? 直接失败），实测只快 ~8 秒，不值。
+execSync(
+  `powershell -NoProfile -Command "Compress-Archive -Path '${join(staging, '*')}' -DestinationPath '${zipPath}' -Force"`,
+  { cwd: root, stdio: 'inherit' }
+)
 rmSync(staging, { recursive: true, force: true })
 
 // 7) 前置补丁（从 win7-patches/ 按架构筛含 6.1 的 .msu）；缺补丁源只提示不失败
