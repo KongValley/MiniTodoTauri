@@ -1,0 +1,8 @@
+# 本项目固定 MSRV 1.77.2（为兼容 Win7，见 README）。让依赖解析优先选 rust-version ≤ 1.77.2 的版本，
+# 避免解析出需要新版 cargo 才能解析清单（如 resolver = "3"）的传递依赖。
+#
+# 注意：个别不声明 rust-version 的传递依赖仍需在 Cargo.lock 里手工钉住（当前：open = 5.3.2，
+# 5.4.x 用了 1.79 才稳定的 std::path::absolute）。刷新依赖（cargo update / generate-lockfile）后
+# 若编译报 MSRV 相关错误，先用 `cargo update -p <包> --precise <版本>` 钉回去再提交。
+[resolver]
+incompatible-rust-versions = "fallback"

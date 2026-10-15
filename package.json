@@ -1,0 +1,41 @@
+{
+  "name": "mini-todo",
+  "version": "1.2.0",
+  "description": "迷你待办 —— 基于 Tauri 的看板式待办管理工具",
+  "license": "GPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tauri dev",
+    "dev:web": "vite",
+    "build": "npm run typecheck && vite build",
+    "build:web": "vite build",
+    "typecheck": "vue-tsc --noEmit",
+    "test": "node --import ./scripts/ts-resolve-hook.mjs --experimental-strip-types --test src/shared/store-ops.test.ts",
+    "test:rust": "cargo test --locked --manifest-path src-tauri/Cargo.toml",
+    "fixtures": "node --import ./scripts/ts-resolve-hook.mjs --experimental-strip-types scripts/gen-normalize-fixtures.mjs",
+    "version:sync": "node scripts/sync-version.mjs",
+    "icon": "node scripts/make-icon.mjs && tauri icon resources/icon.png",
+    "fetch:runtime": "node scripts/fetch-webview2-runtime.mjs",
+    "smoke": "npm run build && cargo build --release --locked --features custom-protocol --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml && node scripts/run-smokes.mjs",
+    "perf:data": "node scripts/gen-perf-data.mjs",
+    "perf": "node scripts/perf-compare.mjs current 3",
+    "dist:win7-32": "node scripts/package-win.mjs win7-ia32",
+    "dist:win7-64": "node scripts/package-win.mjs win7-x64",
+    "dist:win10-32": "node scripts/package-win.mjs win10-ia32",
+    "dist:win10-64": "node scripts/package-win.mjs win10-x64",
+    "dist": "npm run dist:win7-32 && npm run dist:win10-64 && npm run dist:win10-32 && npm run dist:win7-64"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.0",
+    "@types/node": "^22.20.4",
+    "@vitejs/plugin-vue": "5.2.4",
+    "typescript": "^5.9.3",
+    "vite": "5.4.21",
+    "vue": "3.4.38",
+    "vue-tsc": "2.2.12"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
+  }
+}

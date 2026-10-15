@@ -1,0 +1,11 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+tmp/
+release/
+win7-patches/
+webview2-runtime-x86/
+webview2-runtime-x64/
+webview2-109/
+*.log
