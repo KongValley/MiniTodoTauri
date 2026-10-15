@@ -26,17 +26,42 @@ use std::sync::atomic::Ordering;
 use tauri::Manager;
 use tauri_plugin_notification::NotificationExt;
 
-/// Win7 包在 exe 同目录带 `webview2-runtime/`（固定版 109），用官方环境变量指给 WebView2 loader；
-/// 安装版与 zip 绿色版同一机制。找不到目录时不设置 —— 走系统 WebView2（Win10/11 自带）。
+/// WebView2 运行时选择：
+/// - 包内带 `webview2-runtime/`（固定版 109），Win7 上系统没有可用运行时 → 用包内这份；
+/// - 系统已装 WebView2（Win10/11，或装过运行时的老系统）→ 优先用系统版（更新、持续有安全更新）。
+/// 判定只看标准安装目录，不查注册表、不联网；两处都不存在时不设置环境变量，交给 loader 自己报错。
 fn prepare_webview2_runtime() {
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            let rt = dir.join("webview2-runtime");
-            if rt.is_dir() {
-                std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &rt);
-            }
-        }
+    let rt = match std::env::current_exe() {
+        Ok(exe) => match exe.parent() {
+            Some(dir) => dir.join("webview2-runtime"),
+            None => return,
+        },
+        Err(_) => return,
+    };
+    if rt.is_dir() && !system_webview2_present() {
+        std::env::set_var("WEBVIEW2_BROWSER_EXECUTABLE_FOLDER", &rt);
     }
+}
+
+/// 系统是否已安装 WebView2（三处标准安装目录下任一存在 msedgewebview2.exe）
+fn system_webview2_present() -> bool {
+    ["ProgramFiles", "ProgramFiles(x86)", "LOCALAPPDATA"].iter().any(|var| {
+        std::env::var(var)
+            .ok()
+            .filter(|s| !s.is_empty())
+            .map(|root| {
+                std::path::PathBuf::from(root)
+                    .join("Microsoft")
+                    .join("EdgeWebView")
+                    .join("Application")
+            })
+            .map(|app| {
+                std::fs::read_dir(&app)
+                    .map(|rd| rd.flatten().any(|e| e.path().join("msedgewebview2.exe").is_file()))
+                    .unwrap_or(false)
+            })
+            .unwrap_or(false)
+    })
 }
 
 /// 加载数据与设置；首次运行写入示例数据（写失败兜住：不中断启动，改为一次性告警）

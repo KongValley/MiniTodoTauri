@@ -50,7 +50,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        combo: [win7-ia32, win7-x64, win10-ia32, win10-x64]
+        combo: [win7-ia32, win7-x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -90,7 +90,6 @@ jobs:
       # GH_TOKEN 必须有：仓库虽公开，但 gh CLI 无凭据时连下载都会报
       # "could not find any host configurations"。取不到就硬失败。
       - name: 取 Win7 前置补丁
-        if: startsWith(matrix.combo, 'win7-')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -110,7 +109,6 @@ jobs:
           fi
 
       - name: 取 WebView2 109 固定版运行时
-        if: startsWith(matrix.combo, 'win7-')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -138,8 +136,6 @@ jobs:
           case "${{ matrix.combo }}" in
             win7-ia32)  LABEL="Win7-32位" ;;
             win7-x64)   LABEL="Win7-64位" ;;
-            win10-ia32) LABEL="Win10-32位" ;;
-            win10-x64)  LABEL="Win10-64位" ;;
           esac
           [ -d "release/$LABEL" ] || { echo "::error::分发目录 release/$LABEL 不存在"; exit 1; }
           echo "label=$LABEL" >> "$GITHUB_OUTPUT"
@@ -179,10 +175,10 @@ jobs:
           find release -name '安装说明.txt' | sort | head -1 | xargs -r -I{} cp {} dist/win7-patches-readme.txt
           echo "--- 资产清单 ---"
           ls -lh dist
-          # 4 个安装版 exe + 4 个绿色版 zip + 8 个 msu(两个 Win7 架构各 4 个)
-          # + 1 份说明(两个 Win7 架构同名,只取一份)= 17
+          # 2 个安装版 exe + 2 个绿色版 zip + 8 个 msu（两个架构各 4 个）
+          # + 1 份说明（两个架构同名，只取一份）= 13
           N=$(ls dist | wc -l)
-          [ "$N" -eq 17 ] || { echo "::error::预期 17 个资产(4 exe + 4 zip + 8 msu + 1 说明),实际 $N"; exit 1; }
+          [ "$N" -eq 13 ] || { echo "::error::预期 13 个资产(2 exe + 2 zip + 8 msu + 1 说明),实际 $N"; exit 1; }
           if ls dist | grep -qP '[^\x20-\x7e]'; then
             echo "::error::存在非 ASCII 资产名,上传后会被 gh 压成 default.txt"
             ls dist
@@ -207,7 +203,7 @@ jobs:
           fi
           gh release create "$TAG" dist/* \
             --title "迷你待办 ${VERSION}" \
-            --notes "Rust/Tauri 重写版。四架构安装版 + 绿色版,共 17 个资产 = 4 个安装版 exe + 4 个绿色版 zip + 8 个 .msu(两个 Win7 架构各 4 个)+ 1 份说明。**两种分发物**:安装版双击 exe 走安装向导(装到当前用户目录);绿色版是 zip,解压到任意文件夹后双击里面的 exe 即可,不必安装(zip 无外层目录,建议先建一个专用文件夹再解压)。**Win7 用户**:先下载 win7-patches-readme.txt 看补丁安装顺序,按里面的顺序装完 4 个 .msu(先 KB4490628 再 KB4474419),再运行安装包或绿色版;Win7 包已内置 WebView2 109 运行时,无需联网。**Win10 及以上**:系统自带 WebView2 运行时,不需要补补丁,直接跑 exe。" \
+            --notes "Rust/Tauri 重写版。Win7 双架构(32/64)安装版 + 绿色版,共 13 个资产 = 2 个安装版 exe + 2 个绿色版 zip + 8 个 .msu(两个架构各 4 个)+ 1 份说明。**两种分发物**:安装版双击 exe 走安装向导(装到当前用户目录);绿色版是 zip,解压到任意文件夹后双击里面的 exe 即可,不必安装(zip 无外层目录,建议先建一个专用文件夹再解压)。**Win7 用户**:先下载 win7-patches-readme.txt 看补丁安装顺序,按里面的顺序装完 4 个 .msu(先 KB4490628 再 KB4474419),再运行安装包或绿色版;包内自带 WebView2 109 运行时,无需联网。**Win10/11 用户**:同一套包可直接使用(检测到系统自带 WebView2 时优先用系统版),不需要补前置补丁。" \
             --latest
           echo "已发布:$TAG"
 

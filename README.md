@@ -57,8 +57,8 @@
 
 | 目录 | 适用 |
 | --- | --- |
-| `Win7-32位` / `Win7-64位` | Windows 7 SP1（32 位系统选 32 位包；64 位系统两种均可） |
-| `Win10-32位` / `Win10-64位` | Windows 10 / 11 |
+| `Win7-32位` | Windows 7 SP1 32 位（64 位系统两种包均可，32 位系统必须用这个） |
+| `Win7-64位` | Windows 7 SP1 64 位；Windows 10 / 11 也直接用这两套包 |
 
 每个目录里有两个分发物，任选其一：
 
@@ -67,11 +67,11 @@
 | `mini-todo-setup-<版本>-<平台>.exe` | **安装版**：双击走安装向导，装到当前用户目录，自动建开始菜单快捷方式 |
 | `mini-todo-portable-<版本>-<平台>.zip` | **绿色版**：解压后双击里面的 exe，无需安装。**建议先建一个专用文件夹再解压**（zip 没有外层目录，直接解压会与当前目录已有文件混在一起） |
 
-两种分发物的启动速度相同（都在本机直接运行，不做解压）。体积参考：Win7 安装版约 136/149 MB（32/64 位，内含 WebView2 固定版运行时）、绿色版约 181/201 MB；Win10/11 安装版约 4 MB、绿色版约 3 MB（WebView2 用系统的）。
+两种分发物的启动速度相同（都在本机直接运行，不做解压）。体积参考：安装版约 136 MB（32 位）/ 149 MB（64 位），绿色版约 181/201 MB——包内自带一份 WebView2 109 固定版运行时。
 
-**Windows 7 前置要求**：需 **Windows 7 SP1**，并补装 `前置补丁/` 里的 4 个 `.msu`（安装顺序见该目录的《安装说明.txt》，先装 KB4490628 再装 KB4474419）。**WebView2 109 运行时已内置在包内**（Win7 上受支持的最后一个版本），无需联网、无需单独安装。
+**Windows 7 前置要求**：需 **Windows 7 SP1**，并补装 `前置补丁/` 里的 4 个 `.msu`（安装顺序见该目录的《安装说明.txt》，先装 KB4490628 再装 KB4474419）。**运行时不需联网、不需单独安装**。
 
-**Windows 10/11**：系统自带 WebView2 运行时（极老的 Win10 若缺失，安装程序会尝试联网获取一次）。不需要补前置补丁。
+**Windows 10 / 11**：同一套包直接可用、不需要前置补丁；应用启动时**检测到系统自带 WebView2 就优先用系统版**（更新、持续有安全更新），只有系统没有时才回退包内的 109。
 
 ### 数据
 
@@ -87,12 +87,12 @@
 
 | 项 | 说明 |
 | --- | --- |
-| 渲染内核 | WebView2（Win7 = 固定版 109；Win10/11 = 系统自带版本），不再是 Chromium 108 |
+| 渲染内核 | WebView2：Win7 用包内固定版 109；Win10/11 检测到系统运行时则优先用系统版（没有才回退包内的 109） |
 | 菜单栏 | 常显（旧版按 Alt 才显示，因为 Electron 的 autoHideMenuBar 无法在 Tauri 上等价复现） |
 | 安装版 | 一键装到当前用户目录，**不能改安装目录**（旧 electron-builder 向导允许选择） |
 | 单实例锁 | 按应用区分，不再按数据目录区分；冒烟/基准这类多实例脚本需串行执行 |
 | 数据 | 完全兼容：同一路径、同一格式，旧版数据直接续用 |
-| 内存 | WebView2 进程组比旧版 Electron 重：5000 条任务时任务管理器口径约 128 MB（旧版约 83 MB）。主要体积收益在 Win10 安装包（约 4 MB）与不再随包携带整套 Chromium |
+| 内存 | WebView2 进程组比旧版 Electron 重：5000 条任务时任务管理器口径约 128 MB（旧版约 83 MB）。主要收益是不再随包携带整套 Chromium |
 | 崩溃自愈 | 渲染进程崩溃 → 自动重载页面（连续崩超 3 次停止，需手动重启）；未落盘改动会丢，与旧版一致 |
 
 ## 构建
@@ -127,9 +127,7 @@ npm run perf         # 三档 × 3 次取中位数，结果写 tmp/perf-current.
 ```bash
 npm run dist:win7-32     # → release/Win7-32位/
 npm run dist:win7-64     # → release/Win7-64位/
-npm run dist:win10-32    # → release/Win10-32位/
-npm run dist:win10-64    # → release/Win10-64位/
-npm run dist             # 四个架构依次全打
+npm run dist             # 两个架构依次全打
 ```
 
 ## 性能
@@ -224,7 +222,7 @@ scripts/fetch-webview2-runtime.mjs  WebView2 109 运行时获取与展开
 scripts/sync-version.mjs  package.json ↔ tauri.conf.json 版本同步
 scripts/gen-normalize-fixtures.mjs  normalize fixture 生成（TS 实现为准）
 scripts/gen-perf-data.mjs / perf-probe.js / perf-compare.mjs  性能基准
-.github/workflows/release.yml  云端四架构打包 + 发 Release
+.github/workflows/release.yml  云端双架构打包 + 发 Release
 ```
 
 ## 已知限制
@@ -236,7 +234,7 @@ scripts/gen-perf-data.mjs / perf-probe.js / perf-compare.mjs  性能基准
 - 提醒时间用本机时区，不处理跨时区
 - 渲染内核是 WebView2：Win7 上固定为 109（2023 年 1 月后无安全更新，与旧 Electron 22 同样是冻结内核，且版本更高）；Win10/11 跟随系统更新
 - 渲染进程崩溃自动重载（连续崩超 3 次停止重载，需手动重启）；崩溃瞬间未落盘改动会丢
-- Win7 安装包体积 136 MB（32 位）/ 149 MB（64 位），内含 WebView2 固定版运行时；Win10/11 安装包约 4 MB
+- 安装包体积 136 MB（32 位）/ 149 MB（64 位），内含 WebView2 固定版运行时
 
 ## 发布（GitHub Actions 云端打包）
 
@@ -258,9 +256,9 @@ gh release create webview2-109 --title "WebView2 109 固定版运行时源" --no
 | 网页触发 | Actions → release → Run workflow，填版本号（留空取 `package.json`）；`publish=false` 可只验证构建不发布 |
 | 打 tag | `node scripts/sync-version.mjs 1.2.0 && git commit -am "chore: 1.2.0" && git tag v1.2.0 && git push origin main v1.2.0`（tag 与 package.json 版本不一致会直接拒绝发布） |
 
-流水线做的事：`npm ci` → 按架构下载 `.msu` 与 WebView2 运行时压缩包 → `node scripts/sync-version.mjs <版本>`（同步写 package.json 与 tauri.conf.json）→ `node scripts/package-win.mjs <架构>` → 汇总成 Release 资产：**4 个安装版 exe** + **4 个绿色版 zip** + **8 个 `.msu`**（两个 Win7 架构各 4 个）+ **1 份 `win7-patches-readme.txt`**（两个 Win7 架构各有一份中文《安装说明.txt》，只取一份），共 17 个。tag 已存在时会先删旧 Release 再重建，方便重跑。
+流水线做的事：`npm ci` → 按架构下载 `.msu` 与 WebView2 运行时压缩包 → `node scripts/sync-version.mjs <版本>`（同步写 package.json 与 tauri.conf.json）→ `node scripts/package-win.mjs <架构>` → 汇总成 Release 资产：**2 个安装版 exe** + **2 个绿色版 zip** + **8 个 `.msu`**（两个架构各 4 个）+ **1 份 `win7-patches-readme.txt`**（两个架构各有一份中文《安装说明.txt》，只取一份），共 13 个。tag 已存在时会先删旧 Release 再重建，方便重跑。
 
-汇总只收 `mini-todo-*.exe` / `mini-todo-*.zip` 与 `前置补丁/` 下的 `.msu`。**资产名一律 ASCII** —— `gh release create` 会把非 ASCII 文件名压成 `default.txt`，所以本地分发目录里用中文名，上传前复制成 `win7-patches-readme.txt`；资产数不等于 17、或 `dist/` 里出现非 ASCII 文件名，流水线都会失败。
+汇总只收 `mini-todo-*.exe` / `mini-todo-*.zip` 与 `前置补丁/` 下的 `.msu`。**资产名一律 ASCII** —— `gh release create` 会把非 ASCII 文件名压成 `default.txt`，所以本地分发目录里用中文名，上传前复制成 `win7-patches-readme.txt`；资产数不等于 13、或 `dist/` 里出现非 ASCII 文件名，流水线都会失败。
 
 补丁或运行时取不到时流水线**直接失败**，不会产出一个跑不起来的 Win7 包——那种包在 Win7 机器上根本起不来，静默发布比构建失败危险得多。
 

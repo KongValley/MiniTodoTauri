@@ -1,4 +1,6 @@
-// 单架构打包：node scripts/package-win.mjs <win7-ia32|win7-x64|win10-ia32|win10-x64>
+// 单架构打包：node scripts/package-win.mjs <win7-ia32|win7-x64>
+// 只出 Win7 双架构（32/64）：包内自带 WebView2 109 固定版运行时 —— Win7 上直接可用，
+// Win10/11 上装同一套包也能跑（检测到系统 WebView2 时优先用系统版，见 src-tauri/src/main.rs）。
 // 各组合 → release/<中文目录>/，含安装包（NSIS exe）与绿色版（zip，解压即用），文件名自明。
 // Tauri 版与 Electron 版的差异：绿色版 zip 由本脚本组 staging 目录后压缩（Tauri 无 zip 目标）；
 // Win7 组合额外把 WebView2 109 固定版运行时打进包内（exe 同目录的 webview2-runtime/）。
@@ -52,20 +54,6 @@ const combos = {
     overlay: 'src-tauri/tauri.win7-x64.conf.json',
     runtime: 'webview2-runtime-x64',
     patchArch: 'x64'
-  },
-  'win10-ia32': {
-    label: 'Win10-32位',
-    triple: 'i686-pc-windows-msvc',
-    overlay: null,
-    runtime: null,
-    patchArch: null
-  },
-  'win10-x64': {
-    label: 'Win10-64位',
-    triple: 'x86_64-pc-windows-msvc',
-    overlay: null,
-    runtime: null,
-    patchArch: null
   }
 }
 
@@ -91,8 +79,8 @@ execFileSync(process.execPath, [join(root, 'scripts', 'sync-version.mjs')], { cw
 // 2) 渲染层构建（含类型检查）
 execSync('npm run build', { cwd: root, stdio: 'inherit' })
 
-// 3) Win7 组合：运行时必须在位（缺了打出来的包在 Win7 起不来，宁可硬失败）
-if (cfg.runtime) {
+// 3) 运行时必须在位（缺了打出来的包在 Win7 起不来，宁可硬失败）
+{
   const rt = join(root, cfg.runtime)
   if (!existsSync(join(rt, 'msedgewebview2.exe'))) {
     console.error(
@@ -109,7 +97,7 @@ if (!existsSync(tauriJs)) {
   process.exit(1)
 }
 const buildArgs = [tauriJs, 'build', '--target', cfg.triple, '--bundles', 'nsis']
-if (cfg.overlay) buildArgs.push('--config', join(root, cfg.overlay))
+buildArgs.push('--config', join(root, cfg.overlay))
 run(process.execPath, buildArgs)
 
 // 5) 定位 NSIS 产物 → release/<label>/mini-todo-setup-<ver>-<combo>.exe
@@ -129,7 +117,7 @@ mkdirSync(outDir, { recursive: true })
 const setupName = `mini-todo-setup-${pkg.version}-${combo}.exe`
 renameSync(setup, join(outDir, setupName))
 
-// 6) 绿色版 zip：组 staging（exe + WebView2 运行时（仅 Win7））后压缩
+// 6) 绿色版 zip：组 staging（exe + WebView2 固定版运行时）后压缩
 const appExe = join(targetDir, 'mini-todo.exe')
 if (!existsSync(appExe)) {
   console.error(`未找到应用二进制：${appExe}`)
@@ -139,9 +127,7 @@ const staging = join(root, 'tmp', `stage-${combo}`)
 rmSync(staging, { recursive: true, force: true })
 mkdirSync(staging, { recursive: true })
 cpSync(appExe, join(staging, 'mini-todo.exe'))
-if (cfg.runtime) {
-  cpSync(join(root, cfg.runtime), join(staging, 'webview2-runtime'), { recursive: true })
-}
+cpSync(join(root, cfg.runtime), join(staging, 'webview2-runtime'), { recursive: true })
 const zipName = `mini-todo-portable-${pkg.version}-${combo}.zip`
 const zipPath = join(outDir, zipName)
 rmSync(zipPath, { force: true })
@@ -151,8 +137,8 @@ execSync(
 )
 rmSync(staging, { recursive: true, force: true })
 
-// 7) Win7 组合：前置补丁（从 win7-patches/ 按架构筛含 6.1 的 .msu）;缺补丁源只提示不失败
-if (cfg.patchArch) {
+// 7) 前置补丁（从 win7-patches/ 按架构筛含 6.1 的 .msu）；缺补丁源只提示不失败
+{
   const patchSrc = join(root, 'win7-patches')
   const patchDir = join(outDir, '前置补丁')
   mkdirSync(patchDir, { recursive: true })
