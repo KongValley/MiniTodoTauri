@@ -1,0 +1,17 @@
+{
+  "lists": [
+    {
+      "id": "l1",
+      "gid": "g1",
+      "name": "L",
+      "color": "red",
+      "order": 0
+    },
+    {
+      "id": "l2",
+      "gid": "g1",
+      "name": "L2",
+      "color": "#GGGGGG"
+    }
+  ]
+}

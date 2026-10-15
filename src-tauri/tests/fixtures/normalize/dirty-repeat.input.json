@@ -1,0 +1,48 @@
+{
+  "todos": [
+    {
+      "id": "t1",
+      "repeat": {
+        "kind": "weekly"
+      }
+    },
+    {
+      "id": "t2",
+      "repeat": {
+        "kind": "x"
+      }
+    },
+    {
+      "id": "t3",
+      "repeat": {
+        "kind": "monthly",
+        "anchorDay": 31
+      }
+    },
+    {
+      "id": "t4",
+      "repeat": {
+        "kind": "monthly",
+        "anchorDay": 0
+      }
+    },
+    {
+      "id": "t5",
+      "repeat": {
+        "kind": "monthly",
+        "anchorDay": 32
+      }
+    },
+    {
+      "id": "t6",
+      "repeat": "nope"
+    },
+    {
+      "id": "t7",
+      "repeat": {
+        "kind": "monthly",
+        "anchorDay": 3.5
+      }
+    }
+  ]
+}

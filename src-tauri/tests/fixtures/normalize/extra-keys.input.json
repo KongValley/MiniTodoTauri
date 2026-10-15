@@ -1,0 +1,19 @@
+{
+  "version": 99,
+  "extra": true,
+  "groups": [
+    {
+      "id": "g1",
+      "name": "G",
+      "order": 0,
+      "extra": 1
+    }
+  ],
+  "lists": [],
+  "todos": [
+    {
+      "id": "t1",
+      "zzz": "x"
+    }
+  ]
+}

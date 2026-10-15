@@ -1,0 +1,30 @@
+{
+  "version": 2,
+  "groups": [
+    {
+      "id": "g1",
+      "name": "G",
+      "order": 0
+    }
+  ],
+  "lists": [],
+  "todos": [
+    {
+      "id": "t1",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 1,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "groups": [],
+  "lists": [
+    {
+      "id": "l1",
+      "gid": "g1",
+      "name": "L",
+      "color": "#8A8F98",
+      "order": 0
+    },
+    {
+      "id": "l2",
+      "gid": "g1",
+      "name": "L2",
+      "color": "#8A8F98",
+      "order": 1
+    }
+  ],
+  "todos": []
+}

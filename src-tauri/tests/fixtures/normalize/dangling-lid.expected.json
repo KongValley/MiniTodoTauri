@@ -1,0 +1,38 @@
+{
+  "version": 2,
+  "groups": [
+    {
+      "id": "g1",
+      "name": "G",
+      "order": 0
+    }
+  ],
+  "lists": [
+    {
+      "id": "l1",
+      "gid": "g1",
+      "name": "L",
+      "color": "#3A7AFE",
+      "order": 0
+    }
+  ],
+  "todos": [
+    {
+      "id": "t1",
+      "lid": "",
+      "title": "T",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 1,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    }
+  ]
+}

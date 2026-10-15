@@ -1,0 +1,58 @@
+{
+  "version": 2,
+  "groups": [],
+  "lists": [],
+  "todos": [
+    {
+      "id": "t1",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 1,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t2",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 2,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": 5
+    },
+    {
+      "id": "t3",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 3,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": 1.5
+    }
+  ]
+}

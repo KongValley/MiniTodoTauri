@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "resources": { "../webview2-runtime-x64": "webview2-runtime" },
+    "windows": { "webviewInstallMode": { "type": "skip" } }
+  }
+}

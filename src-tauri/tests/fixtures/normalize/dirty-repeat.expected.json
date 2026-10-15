@@ -1,0 +1,128 @@
+{
+  "version": 2,
+  "groups": [],
+  "lists": [],
+  "todos": [
+    {
+      "id": "t1",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 1,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "weekly"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t2",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 2,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t3",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 3,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "monthly",
+        "anchorDay": 31
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t4",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 4,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "monthly"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t5",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 5,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "monthly"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t6",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 6,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    },
+    {
+      "id": "t7",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 7,
+      "order": 0,
+      "subtasks": [],
+      "repeat": {
+        "kind": "monthly",
+        "anchorDay": 3.5
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    }
+  ]
+}

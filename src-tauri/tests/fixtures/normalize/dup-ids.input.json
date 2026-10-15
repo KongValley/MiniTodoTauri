@@ -1,0 +1,37 @@
+{
+  "groups": [
+    {
+      "id": "aaa",
+      "name": "A"
+    },
+    {
+      "id": "aaa",
+      "name": "B"
+    }
+  ],
+  "lists": [
+    {
+      "id": "lll",
+      "gid": "aaa",
+      "name": "L",
+      "color": "#3A7AFE"
+    },
+    {
+      "id": "lll",
+      "gid": "aaa",
+      "name": "M"
+    }
+  ],
+  "todos": [
+    {
+      "id": "ttt",
+      "lid": "lll",
+      "title": "T"
+    },
+    {
+      "id": "ttt",
+      "lid": "lll",
+      "title": "U"
+    }
+  ]
+}

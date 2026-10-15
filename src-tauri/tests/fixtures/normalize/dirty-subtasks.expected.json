@@ -1,0 +1,40 @@
+{
+  "version": 2,
+  "groups": [],
+  "lists": [],
+  "todos": [
+    {
+      "id": "t1",
+      "lid": "",
+      "title": "",
+      "note": "",
+      "date": "",
+      "prio": 2,
+      "status": 0,
+      "seq": 1,
+      "order": 0,
+      "subtasks": [
+        {
+          "id": "__new__",
+          "title": "s1",
+          "done": false
+        },
+        {
+          "id": "__new__",
+          "title": "s2",
+          "done": false
+        },
+        {
+          "id": "s3",
+          "title": "s3",
+          "done": true
+        }
+      ],
+      "repeat": {
+        "kind": "none"
+      },
+      "createdAt": "__now__",
+      "doneAt": null
+    }
+  ]
+}
