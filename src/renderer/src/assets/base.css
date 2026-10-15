@@ -1,0 +1,165 @@
+/* 调色板:键名对齐旧版 Theme.cs 的 19 个语义色。组件样式一律用 var(--*),禁止硬编码十六进制。 */
+:root {
+  --bg: #fbfcfd;
+  --panel: #f3f5f8;
+  --card: #ffffff;
+  --hover: #eef1f5;
+  --sel: #e4eaf3;
+  --line: #d5dae1;
+  --text: #14181f;
+  --text-dim: #5d6673;
+  --text-mute: #9aa3af;
+  --accent: #2563eb;
+  --accent-soft: #e5edfb;
+  --field: #ffffff;
+  --field-line: #c3cad3;
+  --status: #f3f5f8;
+  --shadow: #d3d9e0;
+  --card-hi: #f7f9fc;
+  --rail-active: #e2e8f0;
+  --track: #eceff3;
+  --thumb: #b6bec9;
+  --thumb-hot: #8b95a3;
+  --prio-1: #d34a3e;
+  --prio-2: #dd9e28;
+  --prio-3: #3c9954;
+  --danger: #d34a3e;
+  /* 图标双色:ico-* 为主色,ico-*-2 为阴影/次级色。SVG 图标不描边,靠这两层出体积感 */
+  --ico-blue: #2f6fe4;
+  --ico-blue-2: #1c4bb0;
+  --ico-cyan: #0f8f80;
+  --ico-cyan-2: #0a6f63;
+  --ico-amber: #e08c1f;
+  --ico-amber-2: #b96f14;
+  --ico-green: #3c9954;
+  --ico-green-2: #2c7a41;
+  --ico-red: #d34a3e;
+  --ico-red-2: #ad362c;
+  --ico-gray: #5d6673;
+  --ico-gray-2: #464e59;
+  --ico-violet: #6b53c4;
+  --ico-violet-2: #54409f;
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  --bg: #101418;
+  --panel: #171c22;
+  --card: #1e242c;
+  --hover: #262d37;
+  --sel: #2b3440;
+  --line: #2c343d;
+  --text: #e8ebf0;
+  --text-dim: #98a2af;
+  --text-mute: #66707d;
+  --accent: #4b83f0;
+  --accent-soft: #1d2a44;
+  --field: #171c22;
+  --field-line: #39424e;
+  --status: #171c22;
+  --shadow: #080a0c;
+  --card-hi: #232a33;
+  --rail-active: #2a323d;
+  --track: #222a33;
+  --thumb: #414b57;
+  --thumb-hot: #5a6673;
+  --prio-1: #e8705f;
+  --prio-2: #ecc06a;
+  --prio-3: #5cbc7f;
+  --danger: #e8705f;
+  /* 图标双色:深色下整体提亮,次级色也要跟上,否则阴影层会糊成一片 */
+  --ico-blue: #6d9df5;
+  --ico-blue-2: #4f7fd8;
+  --ico-cyan: #3fbfae;
+  --ico-cyan-2: #2c9b8c;
+  --ico-amber: #f0b45a;
+  --ico-amber-2: #c98f3d;
+  --ico-green: #5cbc7f;
+  --ico-green-2: #42955e;
+  --ico-red: #e8705f;
+  --ico-red-2: #c45546;
+  --ico-gray: #98a2af;
+  --ico-gray-2: #737e8b;
+  --ico-violet: #a48fe8;
+  --ico-violet-2: #8570cd;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  user-select: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--field);
+  border: 1px solid var(--field-line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  outline: none;
+  user-select: text;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+
+input[type='checkbox'] {
+  padding: 0;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--track);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--thumb);
+  border-radius: 5px;
+  border: 2px solid var(--track);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--thumb-hot);
+}
+
+/* 通用:细滚动条(内容装得下时视觉上不占位) */
+.thin-scroll {
+  scrollbar-width: thin;
+}
