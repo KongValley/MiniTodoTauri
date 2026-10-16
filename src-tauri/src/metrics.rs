@@ -13,15 +13,27 @@ mod imp {
     use windows_sys::Win32::System::ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS};
     use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION};
 
+    pub struct ProcMem {
+        pub name: String,
+        pub private_mb: f64,
+    }
+
     pub struct Metrics {
         pub self_pid: u32,
         pub pids: Vec<u32>,
         pub total_rss_mb: f64,
         pub total_private_mb: f64,
         pub proc_count: usize,
+        pub procs: Vec<ProcMem>,
     }
 
-    fn parent_map() -> HashMap<u32, u32> {
+    /// PROCESSENTRY32W.szExeFile 是 NUL 结尾的 UTF-16（basename）
+    fn exe_name(buf: [u16; 260]) -> String {
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        String::from_utf16_lossy(&buf[..end])
+    }
+
+    fn parent_map() -> HashMap<u32, (u32, String)> {
         let mut map = HashMap::new();
         unsafe {
             let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -32,7 +44,7 @@ mod imp {
             entry.dwSize = std::mem::size_of::<PROCESSENTRY32W>() as u32;
             if Process32FirstW(snap, &mut entry) != 0 {
                 loop {
-                    map.insert(entry.th32ProcessID, entry.th32ParentProcessID);
+                    map.insert(entry.th32ProcessID, (entry.th32ParentProcessID, exe_name(entry.szExeFile)));
                     if Process32NextW(snap, &mut entry) == 0 {
                         break;
                     }
@@ -67,7 +79,7 @@ mod imp {
         let mut tree: Vec<u32> = vec![me];
         loop {
             let mut added = false;
-            for (&pid, &ppid) in parents.iter() {
+            for (&pid, &(ppid, _)) in parents.iter() {
                 if !tree.contains(&pid) && tree.contains(&ppid) {
                     tree.push(pid);
                     added = true;
@@ -77,21 +89,25 @@ mod imp {
                 break;
             }
         }
+        let round1 = |bytes: u64| (bytes as f64 / 1024.0 / 1024.0 * 10.0).round() / 10.0;
         let mut rss = 0u64;
         let mut private = 0u64;
+        let mut procs = Vec::new();
         for &pid in &tree {
             if let Some((w, p)) = mem_of(pid) {
                 rss += w;
                 private += p;
+                let name = parents.get(&pid).map(|(_, n)| n.clone()).unwrap_or_default();
+                procs.push(ProcMem { name, private_mb: round1(p) });
             }
         }
-        let round1 = |bytes: u64| (bytes as f64 / 1024.0 / 1024.0 * 10.0).round() / 10.0;
         Metrics {
             self_pid: me,
             proc_count: tree.len(),
             pids: tree,
             total_rss_mb: round1(rss),
             total_private_mb: round1(private),
+            procs,
         }
     }
 }

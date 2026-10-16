@@ -3,9 +3,26 @@
   <head>
     <meta charset="UTF-8" />
     <title>迷你待办</title>
+    <style>
+      /* 骨架屏样式：此时 base.css 可能还没到，颜色只能硬编码，不能依赖 var(--*) */
+      html, body { margin: 0; height: 100%; background: #fbfcfd; }
+      #boot-splash {
+        height: 100%; display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 8px;
+        font: 13px/1.6 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif;
+        color: #5d6673; user-select: none;
+      }
+      #boot-splash .bs-title { font-size: 15px; color: #14181f; }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app">
+      <!-- 骨架屏：放 #app 内是因为 Vue 挂载会 innerHTML = '' 自动清掉，main.ts 无需回收 -->
+      <div id="boot-splash">
+        <div class="bs-title">迷你待办</div>
+        <div>正在启动…</div>
+      </div>
+    </div>
     <!-- 加载失败兜底:独立成文件(CSP script-src 'self' 禁内联);
          构建时会与主 bundle 合并,执行顺序仍在 main.ts 挂载之前 -->
     <script type="module" src="/src/boot-fallback.js"></script>

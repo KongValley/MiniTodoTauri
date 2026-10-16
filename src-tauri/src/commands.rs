@@ -26,8 +26,13 @@ fn first_arg(args: &[Value]) -> Value {
 
 // ---------------------------------------------------------------- 9 个 IPC 命令
 
+static STORE_LOAD_MARKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 #[tauri::command]
 pub fn store_load(app: AppHandle, state: State<'_, AppState>) -> Value {
+    if !STORE_LOAD_MARKED.swap(true, Ordering::SeqCst) {
+        crate::bootlog::mark("store_load");
+    }
     let loaded = store_io::load_store();
     state.set_store(loaded.store.clone());
     let count = crate::scan::count_due(&loaded.store);

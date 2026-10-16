@@ -42,7 +42,8 @@ const scripts = [
   'step26-icons.js',
   'step27-renderer-crash.js',
   'step28-save-fail.js',
-  'step29-sidebar-manage.js'
+  'step29-sidebar-manage.js',
+  'step30-bootlog.js'
 ]
 
 if (!existsSync(appExe)) {
@@ -92,7 +93,17 @@ const MAIN_ASSERTIONS = {
     ['崩溃后窗口仍在', mc.windowAlive === true],
     ['渲染进程崩溃被检测并自动重载', mc.rendererRecovered === true]
   ],
-  'step28-save-fail.js': (mc) => [['注入的保存确实失败了(至少两次)', mc.saveFailures >= 2]]
+  'step28-save-fail.js': (mc) => [['注入的保存确实失败了(至少两次)', mc.saveFailures >= 2]],
+  'step30-bootlog.js': (mc) => {
+    const log = mc.perfLog ?? ''
+    const at = (label) => log.split('\n').findIndex((l) => l.includes(label))
+    return [
+      ['perf.log 已写入', log.length > 0],
+      ['启动打点齐全', ['boot start', 'setup_done', 'window_shown', 'page_load_finished', 'store_load'].every((k) => at(k) >= 0)],
+      ['窗口先于页面加载显示', at('window_shown') >= 0 && at('window_shown') < at('page_load_finished')],
+      ['记录首载内存分解', /mem first_load private=\d+MB/.test(log)]
+    ]
+  }
 }
 
 let failed = 0

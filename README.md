@@ -149,6 +149,8 @@ npm run dist             # 两个架构依次全打
 
 关键设计（改这些地方时注意别退回去）：
 
+- **启动即显示**：窗口 `visible: false` 只在 `setup` 里 `show_window()` 后可见（不再等首个 `PageLoadEvent::Finished`），HTML 里带一屏「迷你待办 / 正在启动…」骨架屏（Vue 挂载时自动清掉）。老机器上 WebView2 内核初始化 + 冷盘读入是秒级，先出窗口再填内容，避免「双击没反应」的观感
+- **自动低配模式**：`main.ts` 按 `hardwareConcurrency ≤ 2` / `deviceMemory ≤ 4` / UA 含 `Windows NT 6.1`（Win7）任一命中 → `html[data-perf=low]`，只关掉逐卡片 `box-shadow`（唯一按项重复的合成开销），卡片仍有 1px 边线
 - `state.store` 用 `markRaw` 包住 —— 派生数据统一由 `store/index.ts` 的 `index` computed 提供，不依赖字段级追踪
 - 视图计数/看板列走 `shared/store-index.ts` 的**单次扫描索引**，不是逐视图扫描。**但看板列要走 `query.ts` 的 `columnsForView()`** —— `index.columns` 是全量扫描的结果，直接喂看板会在「今天」视图下仍列出未来日期的列
 - 看板卡片与列表行都是**窗口化渲染**（`lib/virtual.ts`），只渲染可视区
@@ -174,6 +176,21 @@ powershell -NoProfile -Command "$c=Get-Counter '\Process(mini-todo*)\Working Set
 ```
 
 `npm run perf` 每档会打印私有提交与工作集合计；私有提交越过 320 MB 上限时脚本以非零码退出并提示疑似泄漏（WebView2 基线本身较重，稳态波动不会触发）。
+
+### 启动 / 内存 / 崩溃诊断（perf.log）
+
+每次启动都往数据目录（`%APPDATA%\MiniTodoElectron\perf.log`）追加若干行，`+Nms` 是**进程内**相对 `boot start` 的毫秒数（不含 OS 装载 exe 的时间）：
+
+| 行 | 含义 |
+| --- | --- |
+| `boot start` / `setup_done` | 进程起点 / 装配（读数据、托盘、菜单、看门狗）完成 |
+| `window_shown` | 窗口变可见（早于页面加载，见到的是骨架屏） |
+| `page_load_finished` | WebView2 内核 + 页面装载完成；与 `boot start` 的差是内核成本 |
+| `store_load` | 渲染层取到数据（与 `page_load_finished` 的差 = 我们的数据 + JS 挂载耗时） |
+| `mem first_load` / `mem steady` | 首载与 15 秒后的内存分解：私有提交/工作集/进程数 + 按进程名聚合 |
+| `process_failed kind=N` | WebView2 进程失败（`1`=渲染进程退出→自动重载并记 `renderer_crashed`；`6`=GPU 进程；其余原样记录） |
+
+文件超过 64 KiB 自动保留最后 100 行；只写本地数据目录，内容不含绝对路径。排查「启动慢 / 内存吃紧 / 界面变白」时就近取证（release 无控制台，`eprintln!` 全部丢弃，这里是唯一证据来源）。
 
 ## 图标
 

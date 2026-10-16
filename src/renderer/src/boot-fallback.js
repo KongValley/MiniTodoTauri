@@ -12,7 +12,10 @@ var bootError = ''
 
 function paint() {
   var app = document.getElementById('app')
-  if (!app || booted || app.children.length > 0) return
+  if (!app || booted) return
+  var splash = document.getElementById('boot-splash')
+  if (splash && splash.parentNode) splash.parentNode.removeChild(splash)
+  if (app.children.length > 0) return
   app.textContent = ''
   var box = document.createElement('div')
   box.style.cssText =
@@ -59,4 +62,5 @@ Object.defineProperty(window, '__booted', {
   }
 })
 
-setTimeout(paint, 6000)
+// 老机器冷启动可能超过 6s，骨架屏期间用户是在等待，误报「加载失败」比晚报更伤
+setTimeout(paint, 15000)

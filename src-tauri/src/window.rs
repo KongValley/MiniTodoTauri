@@ -65,8 +65,13 @@ pub fn install_crash_watchdog(app: &AppHandle) {
             let got = args
                 .map(|a| unsafe { a.ProcessFailedKind(&mut kind).is_ok() })
                 .unwrap_or(false);
-            if got && kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED {
-                handle_renderer_gone(&app_for_cb);
+            if got {
+                crate::bootlog::mark(&format!("process_failed kind={}", kind.0));
+                if kind == COREWEBVIEW2_PROCESS_FAILED_KIND_RENDER_PROCESS_EXITED {
+                    handle_renderer_gone(&app_for_cb);
+                }
+            } else {
+                crate::bootlog::mark("process_failed kind=unknown");
             }
             Ok(())
         }));
@@ -82,6 +87,7 @@ fn handle_renderer_gone(app: &AppHandle) {
     let state = app.state::<AppState>();
     let n = state.renderer_crashes.fetch_add(1, Ordering::SeqCst) + 1;
     eprintln!("[renderer] 进程崩溃，第 {n} 次");
+    crate::bootlog::mark(&format!("renderer_crashed n={n}"));
     if n > RENDERER_RELOAD_LIMIT {
         eprintln!("[renderer] 连续崩溃超过上限，停止自动重载，请手动重启应用");
         return;
@@ -106,6 +112,7 @@ pub fn on_page_load_finished(app: &AppHandle) {
     let crashes = state.renderer_crashes.swap(0, Ordering::SeqCst);
     if crashes > 0 {
         state.renderer_recovered.store(true, Ordering::SeqCst);
+        crate::bootlog::mark(&format!("renderer_recovered after={crashes}"));
     }
 
     let first = {
@@ -124,6 +131,8 @@ pub fn on_page_load_finished(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
     }
+    crate::bootlog::mark("page_load_finished");
+    crate::bootlog::snapshot("first_load");
     crate::tray::set_today_count(app, state.due_count());
 
     // 启动告警：损坏文件 / 种子写入失败（对应旧版 did-finish-load 里的一次性提示）

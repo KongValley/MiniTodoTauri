@@ -2,6 +2,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod bootlog;
 mod commands;
 mod dates;
 mod menu;
@@ -85,6 +86,7 @@ fn init_state(app: &tauri::AppHandle) {
 }
 
 fn main() {
+    bootlog::init();
     prepare_webview2_runtime();
 
     // 冒烟注入：让保存真的失败（验证「保存失败」提示与状态栏标记会送达用户，step28）
@@ -149,6 +151,16 @@ fn main() {
             app.set_menu(app_menu)?;
             #[cfg(windows)]
             window::install_crash_watchdog(&handle);
+            // 老机器上 WebView2/Edge 内核初始化要好几秒：等到首帧再 show 会让用户以为「点了没反应」。
+            // 立刻显示（窗口背景色 + 骨架屏同色系，不白闪），内容随后自然填上。
+            window::show_window(&handle);
+            bootlog::mark("window_shown");
+            // 稳态内存分解：15s 后一次（冒烟/基准跑不到 15s，不写 steady 行属正常）
+            std::thread::spawn(|| {
+                std::thread::sleep(std::time::Duration::from_secs(15));
+                bootlog::snapshot("steady");
+            });
+            bootlog::mark("setup_done");
             Ok(())
         })
         .build(tauri::generate_context!())

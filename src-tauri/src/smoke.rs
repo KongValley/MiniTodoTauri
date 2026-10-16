@@ -298,6 +298,7 @@ fn main_checks(app: &AppHandle) -> Value {
         // Tauri 没有 minSize getter：报告创建时设定的常量（900×600，见 tauri.conf.json）
         "minSize": [900, 600],
         "dataDir": paths::data_dir().to_string_lossy(),
+        "perfLog": std::fs::read_to_string(paths::data_dir().join("perf.log")).unwrap_or_default(),
         "rendererRecovered": state.renderer_recovered.load(Ordering::SeqCst),
         "windowAlive": win.is_some(),
         "saveFailures": state.save_failures.load(Ordering::SeqCst),
