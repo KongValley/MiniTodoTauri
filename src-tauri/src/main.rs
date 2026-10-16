@@ -128,8 +128,10 @@ fn main() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 // 关闭 = 隐藏到托盘；真正退出走「文件→退出」/托盘「退出」（app.exit 不触发本事件）
                 api.prevent_close();
-                let _ = win.hide();
                 let app = win.app_handle();
+                // 先存几何再隐藏（隐藏后读几何虽然也有效，但顺序上先存更稳）
+                window::save_bounds(app);
+                let _ = win.hide();
                 if !smoke::is_smoke_mode() {
                     let state = app.state::<state::AppState>();
                     if !state.tray_hint_shown.swap(true, Ordering::SeqCst) {
@@ -151,6 +153,8 @@ fn main() {
             app.set_menu(app_menu)?;
             #[cfg(windows)]
             window::install_crash_watchdog(&handle);
+            // 先按上次几何定位，再显示窗口 —— 避免先显示默认位置再跳到保存位置
+            window::apply_saved_bounds(&handle);
             // 老机器上 WebView2/Edge 内核初始化要好几秒：等到首帧再 show 会让用户以为「点了没反应」。
             // 立刻显示（窗口背景色 + 骨架屏同色系，不白闪），内容随后自然填上。
             window::show_window(&handle);
@@ -166,5 +170,10 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
-    app.run(|_app, _event| {});
+    app.run(|app, event| {
+        // 「文件→退出」与托盘→退出都不走 CloseRequested，几何在这里再存一次（幂等）
+        if let tauri::RunEvent::Exit = event {
+            window::save_bounds(app);
+        }
+    });
 }

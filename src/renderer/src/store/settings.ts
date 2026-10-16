@@ -12,13 +12,16 @@ export interface Settings {
   notifyEnabled: boolean
   notifyAt: string
   lastNotifiedDate: string
+  /** 上次停留的视图键（内置视图名或 `list:`/`group:` + id）；Rust 侧白名单校验字符集与长度 */
+  lastView: string
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   theme: 'system',
   notifyEnabled: false,
   notifyAt: '09:00',
-  lastNotifiedDate: ''
+  lastNotifiedDate: '',
+  lastView: 'week7'
 }
 
 export const settingsState = reactive<{ value: Settings }>({ value: { ...DEFAULT_SETTINGS } })

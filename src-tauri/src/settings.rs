@@ -12,7 +12,9 @@ pub fn default_settings() -> Value {
         "theme": "system",
         "notifyEnabled": false,
         "notifyAt": "09:00",
-        "lastNotifiedDate": ""
+        "lastNotifiedDate": "",
+        "lastView": "week7",
+        "win": { "x": null, "y": null, "w": 0, "h": 0, "max": false }
     })
 }
 
@@ -56,12 +58,43 @@ pub fn normalize(raw: &Value) -> Value {
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    // 上次视图:只放行视图键/清单分组 id 的字符集(小写字母数字与冒号),长度设上限
+    let last_view = o
+        .and_then(|m| m.get("lastView"))
+        .and_then(|v| v.as_str())
+        .filter(|s| {
+            s.len() <= 64
+                && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b':')
+        })
+        .unwrap_or("week7")
+        .to_string();
+    // 窗口几何:四项齐备且落在合理范围才算「存过」,否则整体归零(w=0)
+    let win = o.and_then(|m| m.get("win"));
+    let w = win.and_then(|v| v.get("w")).and_then(|v| v.as_u64());
+    let h = win.and_then(|v| v.get("h")).and_then(|v| v.as_u64());
+    let x = win.and_then(|v| v.get("x")).and_then(|v| v.as_i64());
+    let y = win.and_then(|v| v.get("y")).and_then(|v| v.as_i64());
+    let max = win.and_then(|v| v.get("max")) == Some(&Value::Bool(true));
+    let geom_ok = matches!((w, h, x, y), (Some(w), Some(h), Some(x), Some(y))
+        if (900..=10000).contains(&w)
+            && (600..=10000).contains(&h)
+            && (-32768..=32767).contains(&x)
+            && (-32768..=32767).contains(&y));
 
     let mut m = Map::new();
     m.insert("theme".into(), Value::from(theme));
     m.insert("notifyEnabled".into(), Value::Bool(notify_enabled));
     m.insert("notifyAt".into(), Value::from(notify_at));
     m.insert("lastNotifiedDate".into(), Value::from(last));
+    m.insert("lastView".into(), Value::from(last_view));
+    m.insert(
+        "win".into(),
+        if geom_ok {
+            json!({ "x": x, "y": y, "w": w, "h": h, "max": max })
+        } else {
+            json!({ "x": null, "y": null, "w": 0, "h": 0, "max": false })
+        },
+    );
     Value::Object(m)
 }
 
@@ -118,4 +151,18 @@ pub fn notify_at_of(v: &Value) -> String {
 
 pub fn last_notified_of(v: &Value) -> String {
     v.get("lastNotifiedDate").and_then(|x| x.as_str()).unwrap_or("").to_string()
+}
+
+/// 返回 Some((x, y, w, h, maximized))；w/h 为 0 或 x/y 缺失时 None（没存过 / 被 normalize 归零）
+pub fn win_of(v: &Value) -> Option<(i32, i32, u32, u32, bool)> {
+    let win = v.get("win")?;
+    let w = win.get("w")?.as_u64()?;
+    let h = win.get("h")?.as_u64()?;
+    if w == 0 || h == 0 {
+        return None;
+    }
+    let x = win.get("x")?.as_i64()?;
+    let y = win.get("y")?.as_i64()?;
+    let max = win.get("max") == Some(&Value::Bool(true));
+    Some((x as i32, y as i32, w as u32, h as u32, max))
 }

@@ -7,9 +7,9 @@
  */
 import { markRaw, reactive } from 'vue'
 import { emptyStore, mergeStore, removeTodos, trashExpiredIds } from '@shared/store-ops'
-import type { Store } from '@shared/types'
+import { VIEWS, type Store, type ViewKey } from '@shared/types'
 import { CH } from '@shared/api'
-import { refreshSettings, type Settings } from './settings'
+import { refreshSettings, settingsState, type Settings } from './settings'
 import { askConfirm, toast, ui } from './ui'
 
 export const state = reactive({
@@ -95,6 +95,27 @@ export async function reload(): Promise<void> {
 }
 
 /**
+ * 启动时恢复上次视图（settings.lastView）。
+ * 内置视图直接采用；`list:`/`group:` 的 id 必须在当前 store 里存在，否则回退 week7。
+ * 直接写 ui.view 而不走 setView：启动阶段不该回写一次设置。
+ */
+export function restoreLastView(): void {
+  const v = settingsState.value.lastView
+  if (!v) return
+  if ((VIEWS as readonly string[]).includes(v)) {
+    ui.view = v as ViewKey
+    return
+  }
+  if (v.startsWith('list:')) {
+    if (state.store.lists.some((l) => l.id === v.slice(5))) ui.view = v as ViewKey
+    return
+  }
+  if (v.startsWith('group:')) {
+    if (state.store.groups.some((g) => g.id === v.slice(6))) ui.view = v as ViewKey
+  }
+}
+
+/**
  * 启动时静默清理回收站过期项（deletedAt 早于 TRASH_KEEP_DAYS 天）。
  * 不弹 toast：启动清理是维护动作，不是用户刚做的操作，没有「撤销」语义。
  */
@@ -108,6 +129,7 @@ export async function cleanupExpiredTrash(): Promise<number> {
 export async function init(): Promise<void> {
   await reload()
   state.settings = await refreshSettings()
+  restoreLastView()
   await cleanupExpiredTrash()
   state.ready = true
 }

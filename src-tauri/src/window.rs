@@ -38,6 +38,60 @@ pub fn toggle_window(app: &AppHandle) {
     }
 }
 
+/// 上次窗口几何的恢复与保存。对应旧版 Electron 的 window-state 行为：
+/// 关一次窗口就记住位置尺寸，下次启动原地还原。
+pub fn apply_saved_bounds(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    let Some((x, y, w, h, max)) = crate::settings::win_of(&crate::settings::load_from_disk()) else {
+        return;
+    };
+    // 坐标必须落在某个显示器内才用：换了显示器或拔掉外接屏后，旧坐标会把窗口丢到屏幕外，
+    // 用户既看不到也拖不回来。拿不到显示器列表时同样按「不可达」处理。
+    let reachable = win
+        .available_monitors()
+        .map(|ms| {
+            ms.iter().any(|m| {
+                let p = m.position();
+                let s = m.size();
+                // 标题栏那 100×40 的可抓取区域落进显示器即可
+                x + 100 > p.x && x < p.x + s.width as i32 && y + 40 > p.y && y < p.y + s.height as i32
+            })
+        })
+        .unwrap_or(false);
+    if !reachable {
+        crate::bootlog::mark("bounds_skipped offscreen");
+        return;
+    }
+    let _ = win.set_size(tauri::PhysicalSize::new(w, h));
+    let _ = win.set_position(tauri::PhysicalPosition::new(x, y));
+    if max {
+        let _ = win.maximize();
+    }
+}
+
+/// 保存当前窗口几何。关闭到托盘与「文件/托盘→退出」两条路径都调用（后者晚于前者时是幂等覆盖）。
+pub fn save_bounds(app: &AppHandle) {
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    let (Ok(pos), Ok(size)) = (win.outer_position(), win.inner_size()) else {
+        return;
+    };
+    let state = app.state::<AppState>();
+    let next = crate::settings::merge(
+        &state.settings_snapshot(),
+        &serde_json::json!({ "win": {
+            "x": pos.x, "y": pos.y, "w": size.width, "h": size.height,
+            "max": win.is_maximized().unwrap_or(false)
+        }}),
+    );
+    if crate::settings::save_to_disk(&next).is_ok() {
+        state.set_settings(next);
+    }
+}
+
 /// 渲染进程崩溃自愈：挂 WebView2 的 ProcessFailed，RenderProcessExited 时重载页面。
 /// 渲染进程一死窗口不会消失、只会留一块永远不刷新的空白 —— 关窗口又是隐藏到托盘，
 /// 用户既没提示也没出路（表现为「应用全部变白」），必须自愈。

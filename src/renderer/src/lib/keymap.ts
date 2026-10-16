@@ -6,6 +6,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { addDays, today } from '@shared/dates'
 import type { ViewKey } from '@shared/types'
 import { reload, mutate, state } from '../store/data'
+import { updateSettings } from '../store/settings'
 import { askConfirm, closeCardMenu, closeDialog, closeMeta, requestEdit, requestNew, toast, ui } from '../store/ui'
 import { removeTodos } from '@shared/store-ops'
 import { clearSelection, currentRowIds, selectAll, selectedIds } from './selection'
@@ -40,6 +41,8 @@ export function newTaskPreset(): { date: string; list: string } {
 export function setView(view: ViewKey): void {
   ui.view = view
   clearSelection()
+  // 记住上次视图（启动时由 data.ts 的 restoreLastView 还原）：这里是全应用唯一的视图收口
+  void updateSettings({ lastView: view })
 }
 
 export function toggleBoard(): void {

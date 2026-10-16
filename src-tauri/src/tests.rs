@@ -166,6 +166,23 @@ fn settings_normalize_and_hhmm() {
     assert_eq!(n.get("notifyAt").and_then(|v| v.as_str()), Some("09:00"));
     assert_eq!(n.get("lastNotifiedDate").and_then(|v| v.as_str()), Some(""));
     assert!(n.get("x").is_none(), "未知键丢弃");
+    // 视图记忆与窗口几何：脏值一律回退（null 坐标 + w=0 表示「没存过」）
+    assert_eq!(n.get("lastView").and_then(|v| v.as_str()), Some("week7"), "缺失回退 week7");
+    assert_eq!(settings::win_of(&n), None, "缺失 win 视为没存过");
+    let v = settings::normalize(&json!({
+        "lastView": "list:7eaee681d4",
+        "win": { "x": 300, "y": 200, "w": 1000, "h": 700, "max": true }
+    }));
+    assert_eq!(v.get("lastView").and_then(|x| x.as_str()), Some("list:7eaee681d4"));
+    assert_eq!(settings::win_of(&v), Some((300, 200, 1000, 700, true)));
+    let bad_view = settings::normalize(&json!({ "lastView": "List:先删库!" }));
+    assert_eq!(bad_view.get("lastView").and_then(|x| x.as_str()), Some("week7"), "非法字符集回退");
+    let small = settings::normalize(&json!({ "win": { "x": 0, "y": 0, "w": 10, "h": 10 } }));
+    assert_eq!(settings::win_of(&small), None, "过小尺寸视为没存过");
+    let no_pos = settings::normalize(&json!({ "win": { "w": 1000, "h": 700 } }));
+    assert_eq!(settings::win_of(&no_pos), None, "缺坐标视为没存过");
+    let merged_win = settings::merge(&v, &json!({ "win": { "x": 10, "y": 20, "w": 900, "h": 600, "max": false } }));
+    assert_eq!(settings::win_of(&merged_win), Some((10, 20, 900, 600, false)), "合法值原样保留");
     let merged = settings::merge(&d, &json!({ "theme": "dark" }));
     assert_eq!(merged.get("theme").and_then(|v| v.as_str()), Some("dark"));
     assert_eq!(merged.get("notifyAt").and_then(|v| v.as_str()), Some("09:00"));

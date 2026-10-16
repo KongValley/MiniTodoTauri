@@ -38,6 +38,8 @@ export interface TodoTestAPI {
   ready: () => boolean
   setView: (view: ViewKey) => void
   getView: () => string
+  /** 当前视图键（与 getView 同义，名字用于「上次视图记忆」的断言） */
+  lastView: () => string
   setSearch: (text: string) => void
   counts: () => { all: number; today: number; due: number; trash: number; done: number }
   flush: () => Promise<unknown>
@@ -197,6 +199,7 @@ export function installTestApi(): void {
     openNew: () => requestNew(),
     closeDialog,
 
+    lastView: () => ui.view,
     cleanupExpiredTrash,
     isDate,
     label,
