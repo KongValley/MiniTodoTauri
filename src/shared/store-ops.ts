@@ -274,6 +274,24 @@ export function completeTodo(store: Store, id: string): Store {
   return { ...store, todos: [...todos, spawned] }
 }
 
+/**
+ * 复制任务:新 id、一律 ACTIVE、子任务重置为未完成;清单/日期/优先级/备注/重复规则照抄。
+ * 走 addTodo,不另写插入逻辑(seq 分配、字段归一化都在那里)。
+ */
+export function duplicateTodo(store: Store, id: string): Store {
+  const src = store.todos.find((t) => t.id === id)
+  if (!src) return store
+  return addTodo(store, {
+    lid: src.lid,
+    title: src.title,
+    note: src.note,
+    date: src.date,
+    prio: src.prio,
+    repeat: { ...src.repeat },
+    subtasks: src.subtasks.map((s) => ({ id: newId(), title: s.title, done: false }))
+  })
+}
+
 /** 取消完成 / 恢复(供编辑弹窗改状态用) */
 export function setStatus(store: Store, id: string, status: Status): Store {
   // 「改为已完成」与点勾必须是同一条路径,否则重复任务在弹窗里改完不会生成下一期
@@ -307,6 +325,18 @@ export function trashExpiredIds(store: Store, nowMs: number): string[] {
   const cutoff = nowMs - TRASH_KEEP_DAYS * 86400000
   return store.todos
     .filter((t) => t.status === TRASH && t.deletedAt !== null && t.deletedAt < cutoff)
+    .map((t) => t.id)
+}
+
+/**
+ * 完成时间早于 nowMs - days 天的已完成任务 id（调用的清理动作只移入回收站，仍可恢复）。
+ * doneAt 为 null（旧数据 / 手工编辑过）的项永不清理 —— 与 trashExpiredIds 同一判据：
+ * 宁可留着也不能误清。
+ */
+export function staleDoneIds(store: Store, days: number, nowMs: number): string[] {
+  const cutoff = nowMs - days * 86400000
+  return store.todos
+    .filter((t) => t.status === DONE && t.doneAt !== null && t.doneAt < cutoff)
     .map((t) => t.id)
 }
 

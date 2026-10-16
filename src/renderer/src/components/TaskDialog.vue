@@ -16,7 +16,7 @@ import {
   type Subtask
 } from '@shared/types'
 import { mutate, state } from '../store/data'
-import { closeDialog, ui } from '../store/ui'
+import { closeDialog, requestNew, ui } from '../store/ui'
 import { isComposingEvent } from '../lib/keymap'
 import Icon from './Icon.vue'
 
@@ -85,6 +85,17 @@ function save(): void {
     void mutate((s) => addTodo(s, patch))
   }
   closeDialog()
+}
+
+/**
+ * 保存并新建:沿用本次填的日期与清单,连着录多条不用每轮重选。
+ * save() 内部已 closeDialog,requestNew 的 seq 自增会让弹窗按新预设重挂。
+ */
+function saveAndNew(): void {
+  if (!canSave.value) return
+  const preset = { date: form.noDate ? '' : form.date, list: form.lid }
+  save()
+  requestNew(preset)
 }
 
 function removeThis(): void {
@@ -186,6 +197,9 @@ function removeSub(index: number): void {
           <button v-if="isEdit" class="btn danger" data-testid="dlg-delete" @click="removeThis">移入回收站</button>
           <span class="spacer" />
           <button class="btn" data-testid="dlg-cancel" @click="closeDialog">取消</button>
+          <button v-if="!isEdit" class="btn" data-testid="dlg-save-new" :disabled="!canSave" @click="saveAndNew">
+            保存并新建
+          </button>
           <button class="btn primary" data-testid="dlg-save" :disabled="!canSave" @click="save">保存</button>
         </div>
       </div>

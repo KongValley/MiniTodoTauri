@@ -91,6 +91,10 @@ export interface TodoTestAPI {
   dialog: () => unknown
   openNew: () => void
   closeDialog: () => void
+  /** 打开「从备份恢复」面板（等价于菜单「文件 → 从备份恢复…」） */
+  openBackups: () => void
+  /** 打开「导出为 Markdown / CSV」面板（等价于菜单同名入口） */
+  openExport: () => void
 
   isDate: (s: string) => boolean
   label: (s: string) => string
@@ -198,6 +202,12 @@ export function installTestApi(): void {
     dialog: () => ui.dialog,
     openNew: () => requestNew(),
     closeDialog,
+    openBackups: () => {
+      ui.backupOpen = true
+    },
+    openExport: () => {
+      ui.exportOpen = true
+    },
 
     lastView: () => ui.view,
     cleanupExpiredTrash,

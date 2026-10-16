@@ -129,3 +129,18 @@ export function stamp(): string {
     d.getMinutes()
   )}${pad(d.getSeconds())}`
 }
+
+/** 时间戳 → 本地时区的 'yyyy-MM-dd'（「已完成」按完成日期分段用）;ms<=0 或非法返回 '' */
+export function dayOfMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return ''
+  return fmt(new Date(ms))
+}
+
+/** 时间戳 → 'M月d日 HH:mm'（不是今年则带年份）;ms<=0 或非法返回 '—' */
+export function stampLabel(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return '—'
+  const d = new Date(ms)
+  const y = d.getFullYear()
+  const head = y === new Date().getFullYear() ? '' : `${y}年`
+  return `${head}${d.getMonth() + 1}月${d.getDate()}日 ${pad(d.getHours())}:${pad(d.getMinutes())}`
+}

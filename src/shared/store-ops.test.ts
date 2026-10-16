@@ -24,6 +24,7 @@ import {
   addList,
   addTodo,
   completeTodo,
+  duplicateTodo,
   emptyStore,
   mergeStore,
   moveCard,
@@ -39,6 +40,7 @@ import {
   setStatus,
   toggleSubtask,
   trashExpiredIds,
+  staleDoneIds,
   updateTodo
 } from './store-ops'
 
@@ -957,4 +959,96 @@ test('moveList 跨组后新旧两组的 order 都连续,不留空洞', () => {
   // 找不到 / 不存在的目标组都不得崩
   assert.equal(moveList(base, 'nope', 'g1', 0), base, '找不到清单时原样返回')
   assert.equal(moveList(base, 'a1', 'nope', 0).lists.find((l) => l.id === 'a1')!.gid, 'g1', '无效 gid 回退原组')
+})
+
+test('staleDoneIds 只挑过期的已完成任务:老命中 / 新不命中 / doneAt 缺失不命中', () => {
+  const now = Date.now()
+  const day = 86400000
+  const store: Store = {
+    ...emptyStore(),
+    todos: [
+      todo({ id: 'old', status: DONE, doneAt: now - 31 * day }),
+      todo({ id: 'recent', status: DONE, doneAt: now - 7 * day }),
+      todo({ id: 'unknown', status: DONE, doneAt: null }),
+      todo({ id: 'active', status: ACTIVE, doneAt: now - 31 * day }),
+      todo({ id: 'trashed', status: TRASH, doneAt: now - 31 * day })
+    ]
+  }
+  assert.deepEqual(staleDoneIds(store, 30, now), ['old'], '只有 31 天前完成那条命中')
+  assert.deepEqual(staleDoneIds(store, 6, now), ['old', 'recent'], '阈值缩到 6 天时 7 天前那条也过期')
+  assert.deepEqual(staleDoneIds(store, 7, now), ['old'], '恰好等于阈值不算过期(「早于」是严格小于)')
+  assert.deepEqual(staleDoneIds(store, 365, now), [], '阈值拉长到一年则没有命中')
+})
+
+test('sortedByIndex 在「已完成」视图按完成时间倒序(最近完成的最前)', () => {
+  const now = Date.now()
+  const store: Store = {
+    ...emptyStore(),
+    todos: [
+      todo({ id: 'mid', status: DONE, date: today(), doneAt: now - 1000, seq: 1 }),
+      todo({ id: 'newest', status: DONE, date: '', doneAt: now, seq: 2 }),
+      todo({ id: 'oldest', status: DONE, date: addDays(today(), -3), doneAt: now - 5000, seq: 3 }),
+      todo({ id: 'unknown', status: DONE, doneAt: null, seq: 4 }),
+      todo({ id: 'live', status: ACTIVE, doneAt: now })
+    ]
+  }
+  const idx = buildIndex(store, '')
+  assert.deepEqual(
+    sortedByIndex(idx, 'done').map((x) => x.id),
+    ['newest', 'mid', 'oldest', 'unknown'],
+    '完成时间倒序,doneAt 缺失的沉到最后'
+  )
+  // 用户点列头时仍以用户排序为准(日期升序),不被完成时间覆盖
+  assert.deepEqual(
+    sortedByIndex(idx, 'done', { key: 'date', desc: false }).map((x) => x.id),
+    ['oldest', 'mid', 'newest', 'unknown'],
+    '显式排序优先,未排期仍在末位'
+  )
+})
+
+test('duplicateTodo 复制出独立的新任务:新 id、ACTIVE、子任务重置、其余字段照抄', () => {
+  const src: Store = {
+    ...emptyStore(),
+    lists: [{ id: 'L1', gid: '', name: '清单', color: '#3A7AFE', order: 1 }],
+    todos: [
+      todo({
+        id: 'src',
+        lid: 'L1',
+        title: '原任务',
+        note: '备注',
+        date: today(),
+        prio: 1,
+        status: DONE,
+        doneAt: Date.now(),
+        repeat: { kind: 'weekly' },
+        subtasks: [
+          { id: 's1', title: '已完成子项', done: true },
+          { id: 's2', title: '未完成子项', done: false }
+        ]
+      })
+    ]
+  }
+  const after = duplicateTodo(src, 'src')
+  assert.equal(after.todos.length, 2, '多出一条')
+  const copy = after.todos[1]!
+  assert.notEqual(copy.id, 'src', '新 id')
+  assert.equal(copy.status, ACTIVE, '复制出来的一律是待办')
+  assert.equal(copy.doneAt, null, '不留旧的完成时间')
+  assert.equal(copy.title, '原任务')
+  assert.equal(copy.note, '备注')
+  assert.equal(copy.lid, 'L1')
+  assert.equal(copy.date, today())
+  assert.equal(copy.prio, 1)
+  assert.deepEqual(copy.repeat, { kind: 'weekly' })
+  assert.deepEqual(
+    copy.subtasks.map((s) => [s.title, s.done]),
+    [
+      ['已完成子项', false],
+      ['未完成子项', false]
+    ],
+    '子任务重置为未完成且换了新 id'
+  )
+  assert.notEqual(copy.subtasks[0]?.id, 's1', '子任务 id 也换新,不与原件共享')
+  assert.equal(src.todos.length, 1, '不改原 store')
+  assert.equal(duplicateTodo(src, 'nope'), src, '找不到就原样返回')
 })

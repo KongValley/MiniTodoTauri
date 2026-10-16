@@ -50,13 +50,17 @@ pub fn store_load(app: AppHandle, state: State<'_, AppState>) -> Value {
 pub fn store_save(app: AppHandle, state: State<'_, AppState>, args: Vec<Value>) -> Value {
     let payload = first_arg(&args);
     // 渲染层以序列化字符串发送（传对象要结构化克隆 7.5 万个对象）；字符串原样字节落盘
-    let (bytes, parsed) = match &payload {
+    let (bytes, parsed): (Vec<u8>, Value) = match &payload {
         Value::String(s) => match serde_json::from_str::<Value>(s) {
-            Ok(v) => (s.clone().into_bytes(), v),
+            // 字符串分支要同时拿到「可落盘的字节」与「解析后的树」：一次拷贝换掉整棵 Value 的深拷贝
+            Ok(v) => (s.as_bytes().to_vec(), v),
             Err(e) => return err(format!("数据格式非法:{e}")),
         },
         other => match serde_json::to_string(other) {
-            Ok(s) => (s.into_bytes(), other.clone()),
+            Ok(s) => match serde_json::from_str::<Value>(&s) {
+                Ok(v) => (s.into_bytes(), v),
+                Err(e) => return err(format!("数据格式非法:{e}")),
+            },
             Err(e) => return err(e),
         },
     };
@@ -68,9 +72,14 @@ pub fn store_save(app: AppHandle, state: State<'_, AppState>, args: Vec<Value>) 
         state.save_failures.fetch_add(1, Ordering::SeqCst);
         return err(e);
     }
-    state.set_store(parsed);
-    // 托盘计数是副作用，不能因此把已成功的保存报成失败
-    let count = state.due_count();
+    // 每天一份自动备份。此前只挂在导入路径上，日常使用根本不产生备份（README 承诺的
+    // 「每天自动备份、保留最新 10 份」等于没有）。backup_if_due 自带当天去重，故每次保存都调。
+    // 备份失败绝不影响保存结果：数据已经落盘，只记日志。
+    if let Err(e) = store_io::backup_if_due(&parsed) {
+        eprintln!("[store] 每日备份失败: {e}");
+    }
+    // 托盘计数在 store 交接前借用着算,省掉 store_snapshot() 那次整树深拷贝（1 MB 载荷实测约 13 ms）
+    let count = state.store_scan(crate::scan::count_due, 0, Some(parsed));
     tray::set_today_count(&app, count);
     // 刻意不回传 store（回传会让每次保存多克隆 ~1MB）
     json!({ "ok": true })
@@ -104,9 +113,116 @@ pub async fn store_export(app: AppHandle, args: Vec<Value>) -> Value {
     }
 }
 
+/// 导出文本的上限（5 MB）。渲染层最多导出几千条任务，超过这个量级说明传错了东西。
+const MAX_EXPORT_BYTES: usize = 5_000_000;
+
+/// 文件名净化：Windows 非法字符一律剔除（否则写盘必然失败），再限长 80 字符。
+pub fn safe_file_name(name: &str, ext: &str, fallback: &str) -> String {
+    let cleaned: String = name.chars().filter(|c| !r#"\ / : * ? " < > |"#.contains(*c)).collect();
+    let trimmed = cleaned.trim();
+    if trimmed.is_empty() {
+        return format!("{fallback}.{ext}");
+    }
+    let mut s: String = trimmed.chars().take(80).collect();
+    if !s.to_lowercase().ends_with(&format!(".{ext}")) {
+        s.push_str(&format!(".{ext}"));
+    }
+    s
+}
+
+/// 导出纯文本（Markdown / CSV）。文本由渲染层生成（src/shared/export-text.ts），
+/// 这里只负责选文件名与过滤器、必要时加 BOM、写盘。
 #[tauri::command]
-pub fn store_open_dir(app: AppHandle) -> Value {
-    open_data_dir_impl(&app)
+pub async fn export_text(app: AppHandle, args: Vec<Value>) -> Value {
+    let payload = first_arg(&args);
+    let Some(obj) = payload.as_object() else {
+        return err("导出参数格式非法");
+    };
+    let text = obj.get("text").and_then(|v| v.as_str()).unwrap_or("");
+    if text.is_empty() {
+        return err("没有可导出的内容");
+    }
+    if text.len() > MAX_EXPORT_BYTES {
+        return err("导出内容过大（超过 5 MB）");
+    }
+    let format = obj.get("format").and_then(|v| v.as_str()).unwrap_or("");
+    let (ext, filter) = match format {
+        "md" => ("md", "Markdown"),
+        "csv" => ("csv", "CSV"),
+        _ => return err(format!("不支持的导出格式：{format}")),
+    };
+    let name = safe_file_name(
+        obj.get("name").and_then(|v| v.as_str()).unwrap_or(""),
+        ext,
+        "迷你待办-导出",
+    );
+    // csv 要前置 BOM：Excel 按本地代码页读无 BOM 的 UTF-8，中文全是乱码
+    let body = if format == "csv" { format!("\u{feff}{text}") } else { text.to_string() };
+
+    // 冒烟注入：脚本点不了系统保存对话框，指定目录时直接按默认名写进去（与 TODO_SMOKE_SAVE_FAIL 同款探针）
+    let injected = std::env::var("TODO_SMOKE_EXPORT_DIR")
+        .ok()
+        .filter(|d| !d.is_empty() && std::path::Path::new(d).is_dir());
+    let picked = match injected {
+        Some(dir) => Some(std::path::Path::new(&dir).join(&name)),
+        None => match save_file_blocking_ext(&app, "导出为 Markdown / CSV", name, filter, &[ext]) {
+            Ok(p) => p,
+            Err(e) => return err(e),
+        },
+    };
+    let Some(path) = picked else {
+        return json!({ "ok": true, "canceled": true });
+    };
+    match std::fs::write(&path, body.as_bytes()) {
+        Ok(()) => json!({ "ok": true, "canceled": false, "path": path.to_string_lossy() }),
+        Err(e) => err(e),
+    }
+}
+
+#[tauri::command]
+pub fn store_open_dir(app: AppHandle, args: Vec<Value>) -> Value {
+    // 带 "backups" 时开备份子目录（「从备份恢复」里的入口），否则仍是数据目录
+    let dir = if first_arg(&args).as_str() == Some("backups") {
+        paths::backup_dir()
+    } else {
+        paths::data_dir()
+    };
+    open_dir(&app, dir)
+}
+
+/// 列出备份供「从备份恢复」用：损坏的文件也列出来（标 ok:false 并禁用恢复按钮），
+/// 否则用户只会看到「一份备份都没有」，误以为备份功能没生效。
+#[tauri::command]
+pub fn backups_list() -> Value {
+    let items: Vec<Value> = store_io::list_backups()
+        .into_iter()
+        .map(|p| {
+            let name = p.file_name().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+            let mtime_ms = std::fs::metadata(&p)
+                .and_then(|m| m.modified())
+                .ok()
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0);
+            match store_io::import_from_file(&p) {
+                Ok(r) => json!({
+                    "name": name,
+                    "path": p.to_string_lossy(),
+                    "mtimeMs": mtime_ms,
+                    "ok": true,
+                    "counts": r.counts
+                }),
+                Err(e) => json!({
+                    "name": name,
+                    "path": p.to_string_lossy(),
+                    "mtimeMs": mtime_ms,
+                    "ok": false,
+                    "error": e
+                }),
+            }
+        })
+        .collect();
+    json!({ "ok": true, "dir": paths::backup_dir().to_string_lossy(), "items": items })
 }
 
 #[tauri::command]
@@ -156,12 +272,11 @@ pub fn quit_app(app: &AppHandle) {
 }
 
 pub fn open_data_dir(app: &AppHandle) {
-    let _ = open_data_dir_impl(app);
+    let _ = open_dir(app, paths::data_dir());
 }
 
-fn open_data_dir_impl(app: &AppHandle) -> Value {
-    let dir = paths::data_dir();
-    // 目录不存在先建；仍失败直接返回，绝不把不存在的路径交给 open
+/// 在文件管理器里打开目录；目录不存在先建（失败直接返回，绝不把不存在的路径交给 open）
+fn open_dir(app: &AppHandle, dir: PathBuf) -> Value {
     if !dir.exists() {
         let _ = std::fs::create_dir_all(&dir);
     }
@@ -175,12 +290,21 @@ fn open_data_dir_impl(app: &AppHandle) -> Value {
     }
 }
 
+/// 「关于」正文。抽出来是为了能单测（备份目录与恢复入口必须出现在文案里，
+/// 否则用户找不到备份文件在哪）。
+pub fn about_detail() -> String {
+    format!(
+        "看板式待办管理工具\n数据目录：{}\n备份目录：{}\n（每天首次改动自动写一份，保留最新 10 份；恢复入口：文件 → 从备份恢复…）",
+        paths::data_dir().display(),
+        paths::backup_dir().display()
+    )
+}
+
 pub fn show_about(app: &AppHandle) {
     let version = app.package_info().version.to_string();
-    let detail = format!("看板式待办管理工具\n数据目录：{}", paths::data_dir().display());
     let _ = app
         .dialog()
-        .message(format!("迷你待办 {version}\n\n{detail}"))
+        .message(format!("迷你待办 {version}\n\n{}", about_detail()))
         .title("关于 迷你待办")
         .kind(MessageDialogKind::Info)
         .blocking_show();
@@ -321,12 +445,24 @@ fn pick_file_blocking(app: &AppHandle, preset: Option<PathBuf>) -> Result<Option
 }
 
 fn save_file_blocking(app: &AppHandle, default_name: String) -> Result<Option<PathBuf>, String> {
+    save_file_blocking_ext(app, "导出数据", default_name, "JSON 数据", &["json"])
+}
+
+/// 保存对话框：标题 / 默认文件名 / 过滤器由调用方给（JSON 导出与 Markdown·CSV 导出共用）。
+/// 用法约定：只在工作线程调用（内部用非阻塞 API + channel 等待，主线程调用不会死锁主线程）。
+fn save_file_blocking_ext(
+    app: &AppHandle,
+    title: &str,
+    default_name: String,
+    filter_name: &str,
+    exts: &[&str],
+) -> Result<Option<PathBuf>, String> {
     let (tx, rx) = std::sync::mpsc::channel();
     app.dialog()
         .file()
-        .set_title("导出数据")
+        .set_title(title)
         .set_file_name(default_name)
-        .add_filter("JSON 数据", &["json"])
+        .add_filter(filter_name, exts)
         .save_file(move |p| {
             let _ = tx.send(p);
         });

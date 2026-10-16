@@ -69,19 +69,25 @@ fn system_webview2_present() -> bool {
 fn init_state(app: &tauri::AppHandle) {
     let state = app.state::<state::AppState>();
     let loaded = store_io::load_store();
-    state.set_store(loaded.store.clone());
+    // 接管 store 且一次深拷贝都不做(store_load 那边同理):load_store 返回的树直接 move 进锁内
+    state.store_scan(|_| (), (), Some(loaded.store));
     state.set_settings(settings::load_from_disk());
     if !paths::store_path().exists() {
-        match serde_json::to_string(&loaded.store) {
-            Ok(text) => {
-                if let Err(e) = store_io::save_store(text.as_bytes()) {
-                    let msg = format!("示例数据写入失败：{e}。数据目录不可写，改动不会被保存。");
-                    eprintln!("[startup] {msg}");
-                    state.set_startup_warning(msg);
+        // 只有「首次运行写种子」这条路才需要再拿一份树去序列化
+        state.store_scan(
+            |store| match serde_json::to_string(store) {
+                Ok(text) => {
+                    if let Err(e) = store_io::save_store(text.as_bytes()) {
+                        let msg = format!("示例数据写入失败：{e}。数据目录不可写，改动不会被保存。");
+                        eprintln!("[startup] {msg}");
+                        state.set_startup_warning(msg);
+                    }
                 }
-            }
-            Err(e) => eprintln!("[startup] 序列化示例数据失败: {e}"),
-        }
+                Err(e) => eprintln!("[startup] 序列化示例数据失败: {e}"),
+            },
+            (),
+            None,
+        );
     }
 }
 
@@ -108,7 +114,9 @@ fn main() {
             commands::store_save,
             commands::store_import,
             commands::store_export,
+            commands::export_text,
             commands::store_open_dir,
+            commands::backups_list,
             commands::settings_load,
             commands::settings_save,
             commands::app_version,

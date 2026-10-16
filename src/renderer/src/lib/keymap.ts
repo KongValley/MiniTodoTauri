@@ -5,11 +5,11 @@
 import { onBeforeUnmount, onMounted } from 'vue'
 import { addDays, today } from '@shared/dates'
 import type { ViewKey } from '@shared/types'
-import { reload, mutate, state } from '../store/data'
+import { reload, mutate, state, undoLast } from '../store/data'
 import { updateSettings } from '../store/settings'
-import { askConfirm, closeCardMenu, closeDialog, closeMeta, requestEdit, requestNew, toast, ui } from '../store/ui'
-import { removeTodos } from '@shared/store-ops'
-import { clearSelection, currentRowIds, selectAll, selectedIds } from './selection'
+import { askConfirm, boardScrollBy, closeCardMenu, closeDialog, closeMeta, requestEdit, requestNew, toast, ui } from '../store/ui'
+import { addTodo, duplicateTodo, removeTodos } from '@shared/store-ops'
+import { clearSelection, currentRowIds, moveSelection, selectAll, selectEdge, selectedIds } from './selection'
 
 export function isTypingTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -63,6 +63,34 @@ function handleDelete(): void {
         clearSelection()
       })
     }
+  )
+}
+
+/** 剪贴板批量新建的上限:粘进一大段文本不该一次建出几千条任务 */
+const PASTE_MAX = 200
+
+/**
+ * 剪贴板 → 批量新建任务(每行一条,空行跳过、首尾空白去掉)。
+ * 输入框/文本域里走原生粘贴(用户是在编辑文本,不是在建任务);弹窗开着时不动作,
+ * 否则会在用户看不见的列表后面静悄悄建一堆。
+ */
+function onPaste(event: ClipboardEvent): void {
+  if (isTypingTarget(event.target) || ui.dialog || ui.confirm || ui.meta) return
+  const text = event.clipboardData?.getData('text') ?? ''
+  const lines = text
+    .split(/\r?\n/)
+    .map((s) => s.trim())
+    .filter((s) => s !== '')
+  if (lines.length === 0) return
+  event.preventDefault()
+  const take = lines.slice(0, PASTE_MAX)
+  const preset = newTaskPreset()
+  void mutate((s) => take.reduce((acc, title) => addTodo(acc, { title, date: preset.date, lid: preset.list }), s)).then(
+    () =>
+      toast(`已从剪贴板新建 ${take.length} 条${lines.length > take.length ? `（超出 ${PASTE_MAX} 行已忽略）` : ''}`, {
+        label: '撤销',
+        run: () => void undoLast()
+      })
   )
 }
 
@@ -130,6 +158,34 @@ export function useGlobalKeymap(): void {
       return
     }
 
+    // 复制选中任务(限单选:多选会一次建出一堆,没有对应的批量入口)
+    if (ctrl && key === 'd' && !ui.board && selectedIds.size === 1) {
+      event.preventDefault()
+      const id = [...selectedIds][0] as string
+      void mutate((s) => duplicateTodo(s, id)).then(() => toast('已复制为一条新任务'))
+      return
+    }
+
+    // 方向键:列表里移动选中行(Shift 连选),看板里左右滚动一列
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      if (ui.board) return
+      event.preventDefault()
+      moveSelection(event.key === 'ArrowDown' ? 1 : -1, event.shiftKey)
+      return
+    }
+    if (event.key === 'Home' || event.key === 'End') {
+      if (ui.board) return
+      event.preventDefault()
+      selectEdge(event.key === 'Home' ? 'first' : 'last', event.shiftKey)
+      return
+    }
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+      if (!ui.board) return
+      event.preventDefault()
+      boardScrollBy(event.key === 'ArrowLeft' ? -1 : 1)
+      return
+    }
+
     switch (event.key) {
       case 'n':
       case 'N': {
@@ -167,6 +223,12 @@ export function useGlobalKeymap(): void {
     }
   }
 
-  onMounted(() => window.addEventListener('keydown', onKeyDown))
-  onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
+  onMounted(() => {
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('paste', onPaste)
+  })
+  onBeforeUnmount(() => {
+    window.removeEventListener('keydown', onKeyDown)
+    window.removeEventListener('paste', onPaste)
+  })
 }

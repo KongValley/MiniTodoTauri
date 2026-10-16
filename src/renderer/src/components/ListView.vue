@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { addDays, label, overdueDays, today } from '@shared/dates'
+import { addDays, dayOfMs, label, overdueDays, stampLabel, today } from '@shared/dates'
 import { sortedByIndex, type ListSort, type ListSortKey } from '@shared/query'
-import { INBOX_NAME, PRIO_COLOR, PRIO_NAME, STATUS_NAME, type TodoItem } from '@shared/types'
-import { completeTodo, removeTodos } from '@shared/store-ops'
-import { importFromDialog, mutate, undoLast } from '../store/data'
+import { DROPPED, INBOX_NAME, PRIO_COLOR, PRIO_NAME, STATUS_NAME, type TodoItem } from '@shared/types'
+import { completeTodo, removeTodos, staleDoneIds } from '@shared/store-ops'
+import { importFromDialog, mutate, state, undoLast } from '../store/data'
 import { clockTick, index } from '../store/index'
 import { askConfirm, openCardMenu, requestEdit, requestNew, toast, ui } from '../store/ui'
-import { clearSelection, selectedIds, setRowSource, setSelection, toggleSelection } from '../lib/selection'
+import { clearSelection, getAnchor, selectedIds, selectRange, setAnchor, setRowScroll, setRowSource, setSelection, toggleSelection } from '../lib/selection'
 import { segments } from '../lib/search'
 import { useVirtual } from '../lib/virtual'
 import BulkMenu from './BulkMenu.vue'
@@ -22,15 +22,47 @@ const prioIcon = (p: number): string => (p === 1 ? 'flagHigh' : p === 2 ? 'flagM
 /** 逾期天数:只对未完成任务显示(与卡片同一判据) */
 const odOf = (t: TodoItem): number => (t.status === 0 ? overdueDays(t.date) : 0)
 
-/** 列表行 = 分段头(仅 week7)或任务;虚拟滚动与 Ctrl+A 都基于这个序列 */
+/** 列表行 = 分段头(仅 week7 / done)或任务;虚拟滚动与 Ctrl+A 都基于这个序列 */
 type Row = { kind: 'head'; label: string; count: number } | { kind: 'item'; item: TodoItem }
 
-const lastClicked = ref<string | null>(null)
-/** 批量操作菜单开关(仅列表视图工具条) */
 const bulkOpen = ref(false)
+/** 「已完成」工具条的清理天数选择;动作执行后立即清回占位项 */
+const cleanDays = ref('')
+
+/** 近 7 天完成的条数(已完成视图工具条用) */
+const doneLast7 = computed(() => {
+  const cutoff = Date.now() - 7 * 86400000
+  return itemRows.value.filter((r) => r.item.doneAt !== null && r.item.doneAt > cutoff).length
+})
 
 const rows = computed<Row[]>(() => {
   const items = sortedByIndex(index.value, ui.view, ui.listSort)
+  // 「已完成」按完成日期分段(日期降序,最近完成的在最前);doneAt 缺失的旧数据自成一段放最后
+  if (ui.view === 'done') {
+    const byDay = new Map<string, TodoItem[]>()
+    const unknown: TodoItem[] = []
+    for (const it of items) {
+      if (it.doneAt === null) {
+        unknown.push(it)
+        continue
+      }
+      const day = dayOfMs(it.doneAt)
+      const arr = byDay.get(day)
+      if (arr) arr.push(it)
+      else byDay.set(day, [it])
+    }
+    const out: Row[] = []
+    for (const day of [...byDay.keys()].sort().reverse()) {
+      const arr = byDay.get(day) as TodoItem[]
+      out.push({ kind: 'head', label: label(day), count: arr.length })
+      for (const item of arr) out.push({ kind: 'item', item })
+    }
+    if (unknown.length > 0) {
+      out.push({ kind: 'head', label: '完成时间未知', count: unknown.length })
+      for (const item of unknown) out.push({ kind: 'item', item })
+    }
+    return out
+  }
   // week7 的索引口径是 [今天, 今天+6](不含逾期),因此只分 今天/明天/本周稍后 三段
   if (ui.view !== 'week7') return items.map((item) => ({ kind: 'item', item }) as Row)
   // 读 clockTick 建依赖:否则跨零点后这三段的分界还是昨天的
@@ -85,7 +117,7 @@ watch(
   () => [ui.view, ui.search],
   () => {
     clearSelection()
-    lastClicked.value = null
+    setAnchor(null)
     scrollTop.value = 0
     const host = scroller.value
     if (host) host.scrollTop = 0
@@ -102,11 +134,22 @@ onMounted(() => {
   ro.observe(scroller.value as Element)
   // Ctrl+A 的行源随挂载注册/卸载清空,否则看板下会选到残留行
   setRowSource(() => itemRows.value.map((r) => r.item.id))
+  // 键盘移动选中行后把它滚进视口:行高与滚动容器只有这里知道。
+  // 下标取 rows(含分段头)而不是 itemRows —— 分段头同样占一行高度,否则「已完成/最近7天」里会偏。
+  setRowScroll((id) => {
+    const i = rows.value.findIndex((r) => r.kind === 'item' && r.item.id === id)
+    const host = scroller.value
+    if (i < 0 || !host) return
+    const top = i * ROW_H
+    if (top < host.scrollTop) host.scrollTop = top
+    else if (top + ROW_H > host.scrollTop + host.clientHeight) host.scrollTop = top + ROW_H - host.clientHeight
+  })
 })
 
 onBeforeUnmount(() => {
   ro?.disconnect()
   setRowSource(() => [])
+  setRowScroll(() => {})
 })
 
 function onScroll(): void {
@@ -134,18 +177,14 @@ function toggleAll(): void {
 function onRowCheck(event: MouseEvent, item: TodoItem): void {
   const id = item.id
   const ids = itemRows.value.map((r) => r.item.id)
-  if (event.shiftKey && lastClicked.value) {
-    const from = ids.indexOf(lastClicked.value)
-    const to = ids.indexOf(id)
-    if (from >= 0 && to >= 0) {
-      const [lo, hi] = from < to ? [from, to] : [to, from]
-      setSelection(ids.slice(lo, hi + 1))
-      return
-    }
+  // Shift 连选的锚点与键盘移动共用一份(selection.ts),两边不会各自漂移
+  if (event.shiftKey && getAnchor()) {
+    selectRange(ids, id)
+    return
   }
   if (event.ctrlKey || event.metaKey) toggleSelection(id)
   else setSelection([id])
-  lastClicked.value = id
+  setAnchor(id)
 }
 
 function onRowCtx(event: MouseEvent, item: TodoItem): void {
@@ -184,14 +223,58 @@ function onDeleteSelected(): void {
 function onOpen(item: TodoItem): void {
   requestEdit(item.id)
 }
+
+/** 清理早于 N 天的已完成任务:只移入回收站(可恢复),不是真删 */
+function onCleanDone(): void {
+  const days = Number(cleanDays.value)
+  cleanDays.value = ''
+  if (!days) return
+  const ids = staleDoneIds(state.store, days, Date.now())
+  if (ids.length === 0) {
+    toast('没有符合条件的已完成任务')
+    return
+  }
+  askConfirm('清理已完成', `将把 ${ids.length} 条早于 ${days} 天的已完成任务移入回收站（可恢复）。`, () => {
+    void mutate((s) => removeTodos(s, ids, false)).then(() => {
+      clearSelection()
+      toast(`已清理 ${ids.length} 条已完成任务`, { label: '撤销', run: () => void undoLast() })
+    })
+  })
+}
+
+/** 清空已放弃:同样走回收站,用户点错也回得来 */
+function onClearDropped(): void {
+  const ids = state.store.todos.filter((t) => t.status === DROPPED).map((t) => t.id)
+  if (ids.length === 0) {
+    toast('已放弃是空的')
+    return
+  }
+  askConfirm('清空已放弃', `将把 ${ids.length} 条已放弃任务移入回收站（可恢复）。`, () => {
+    void mutate((s) => removeTodos(s, ids, false)).then(() => {
+      clearSelection()
+      toast(`已清理 ${ids.length} 条已放弃任务`, { label: '撤销', run: () => void undoLast() })
+    })
+  })
+}
 </script>
 
 <template>
   <div class="list" data-testid="list" @click.self="clearSelection">
     <div class="toolbar">
-      <span class="count">共 {{ itemRows.length }} 条</span>
+      <span class="count" data-testid="list-count">
+        {{ ui.view === 'done' ? `共 ${itemRows.length} 条 · 近 7 天完成 ${doneLast7} 条` : `共 ${itemRows.length} 条` }}
+      </span>
       <span v-if="selectedIds.size > 0" class="sel">已选 {{ selectedIds.size }} 条</span>
       <span class="spacer" />
+      <select v-if="ui.view === 'done'" v-model="cleanDays" data-testid="clean-done" @change="onCleanDone">
+        <option value="">清理早于…</option>
+        <option value="7">7 天</option>
+        <option value="30">30 天</option>
+        <option value="90">90 天</option>
+      </select>
+      <button v-if="ui.view === 'dropped'" class="btn" data-testid="clear-dropped" @click="onClearDropped">
+        清空已放弃
+      </button>
       <button class="btn" data-testid="bulk-menu" :disabled="selectedIds.size === 0" @click.stop="bulkOpen = !bulkOpen">
         批量…
       </button>
@@ -253,7 +336,12 @@ function onOpen(item: TodoItem): void {
                 {{ v.item.item.subtasks.filter((s) => s.done).length }}/{{ v.item.item.subtasks.length }}
               </span>
             </span>
-            <span class="cell date">{{ label(v.item.item.date) }}<span v-if="odOf(v.item.item) > 0" class="overdue" data-overdue>逾期 {{ odOf(v.item.item) }} 天</span></span>
+            <span class="cell date">
+              <template v-if="ui.view === 'done'">{{ v.item.item.doneAt ? stampLabel(v.item.item.doneAt) : '—' }}</template>
+              <template v-else>
+                {{ label(v.item.item.date) }}<span v-if="odOf(v.item.item) > 0" class="overdue" data-overdue>逾期 {{ odOf(v.item.item) }} 天</span>
+              </template>
+            </span>
             <span class="cell lname"><i class="dot" :style="{ background: colorOf(v.item.item) }" />{{ nameOf(v.item.item) }}</span>
             <span class="cell prio">
               <i class="pi" :style="{ color: PRIO_COLOR[v.item.item.prio] }"><Icon :name="prioIcon(v.item.item.prio)" :size="12" /></i>{{ PRIO_NAME[v.item.item.prio] }}

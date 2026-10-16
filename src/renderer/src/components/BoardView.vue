@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { today } from '@shared/dates'
 import { columnsForView } from '@shared/query'
 import { moveCard } from '@shared/store-ops'
@@ -112,6 +112,17 @@ function scrollToToday(): void {
   host.scrollLeft = Math.max(0, idx * COL_W)
   hScrollLeft.value = host.scrollLeft
 }
+
+/** 方向键左右滚动一列(请求来自 keymap;列宽与容器只有这里知道) */
+watch(
+  () => ui.boardScroll.seq,
+  () => {
+    const host = horizontal.value
+    if (!host) return
+    host.scrollLeft = Math.max(0, host.scrollLeft + ui.boardScroll.delta * COL_W)
+    hScrollLeft.value = host.scrollLeft
+  }
+)
 </script>
 
 <template>

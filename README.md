@@ -14,13 +14,14 @@
 | 侧栏 | 分组与清单可**新建、重命名、删除、拖拽排序**（清单可跨分组拖）。删清单时可选「任务移到收集箱」或「**任务移入回收站**」；删分组则组内清单一并删除、任务统一移到收集箱，全程不丢任务 |
 | 重复 | 不重复 / 每天 / 每周 / 每月 / 工作日；**每月记住原始日号**（选 31 号则 1-31 → 2-28 → 3-31，不会卡在 28 号） |
 | 任务 | 标题、备注、日期（可「不排期」）、清单、优先级（高/中/低）、状态（待办/已完成/已放弃/回收站） |
-| 增强 | **看板拖拽**改期与同优先级桶内排序、**深色/浅色主题**、**托盘常驻 + 到期通知**、**子任务清单**、**重复任务**、**右键菜单**（改期/改优先级/完成/删除）、**列表列排序**、**搜索词高亮**、**自动备份 + 导入导出**（导入可选替换/合并）、**自绘彩色 SVG 图标**（双主题自适应，零图标库依赖） |
-| 效率 | 「**今天**」视图含逾期（卡片/列表行标「逾期 N 天」，与状态栏、托盘同一口径）；列表视图**批量操作**（完成 / 优先级 / 改期 / 移动清单，选中后点「批量…」）；**删除可撤销**（底部提示 4 秒内点「撤销」即整棵还原，连彻底删除也能救回）；搜索命中**标题 / 备注 / 子任务 / 清单名 / 分组名** |
+| 增强 | **看板拖拽**改期与同优先级桶内排序、**深色/浅色主题**、**托盘常驻 + 到期通知**、**子任务清单**、**重复任务**、**右键菜单**（编辑/复制/改期/改优先级/移动到清单/完成/删除）、**列表列排序**、**搜索词高亮**、**自动备份 + 从备份恢复 + 导入导出**（导入可选替换/合并，导入与恢复都可「撤销」回退）、**导出 Markdown / CSV**、**自绘彩色 SVG 图标**（双主题自适应，零图标库依赖） |
+| 效率 | 「**今天**」视图含逾期（卡片/列表行标「逾期 N 天」，与状态栏、托盘同一口径）；列表视图**批量操作**（完成 / 优先级 / 改期 / 移动清单，选中后点「批量…」）；**删除可撤销**（底部提示 4 秒内点「撤销」即整棵还原，连彻底删除也能救回）；**复制任务**（`Ctrl+D`）、**剪贴板批量新建**（`Ctrl+V`，每行一条）、**保存并新建**（连续录入）、右键**移动到清单**；搜索命中**标题 / 备注 / 子任务 / 清单名 / 分组名** |
+| 整理 | 「已完成」视图**按完成日期分段**、段内按完成时间倒序，工具条给出「近 7 天完成 N 条」并能「**清理早于 7 / 30 / 90 天**」；「已放弃」视图可**一键清空**；两者都只移入回收站（可恢复）且带「撤销」 |
 | 回收站 | 侧栏回收站行悬停出现「**清空**」；进入回收站的项保留 `deletedAt`，**超过 30 天在启动时静默清理**（旧数据无此字段则永不清理） |
 | 记忆 | **窗口尺寸与位置**、**上次视图**都记在 `settings.json`，下次启动原地还原；坐标不在任何显示器内时（换屏/拔外接屏）回落默认位置，绝不把窗口丢到屏幕外 |
 | 提醒 | 全局提醒时间 + 托盘菜单/状态栏的「**稍后提醒 10 分钟**」（到点穿透「同日不重复」再提醒一次） |
-| 数据 | `%APPDATA%\MiniTodoElectron\todos.json`，UTF-8 明文，可直接备份/编辑；每天自动备份到 `backups/`（保留最新 10 份） |
-| 迁移 | 「文件 → 导入旧版数据…」默认指向 `%APPDATA%\MiniTodo\todos.json`，一次性导入旧版数据（导入前自动备份） |
+| 数据 | `%APPDATA%\MiniTodoElectron\todos.json`，UTF-8 明文，可直接备份/编辑；**每次改动按需自动备份**到 `backups/`（每天一份，保留最新 10 份），「文件 → 从备份恢复…」列出这些备份一键恢复 |
+| 迁移 | 「文件 → 导入旧版数据…」默认指向 `%APPDATA%\MiniTodo\todos.json`，一次性导入旧版数据（导入前自动备份）；「文件 → 导出为 Markdown / CSV…」导出可读文本（CSV 带 BOM，Excel 直接打开不乱码） |
 
 ## 快捷键
 
@@ -29,6 +30,11 @@
 | `N` | 新建任务 |
 | `Enter` / `F2` | 打开选中任务（列表视图） |
 | `Del` | 删除选中（回收站视图里是彻底删除） |
+| `↑` `↓` | 列表视图移动选中行（`Shift` 连选，选中行自动滚进视口） |
+| `Home` / `End` | 列表视图跳到首 / 尾行 |
+| `←` `→` | 看板视图左右滚动一列 |
+| `Ctrl+D` | 复制选中任务（新 id、待办、子任务重置） |
+| `Ctrl+V` | 剪贴板批量新建任务（每行一条；输入框内仍是原生粘贴） |
 | `B` | 切换看板 / 列表 |
 | `Ctrl+1` / `Ctrl+2` | 菜单「视图 → 看板 / 列表」 |
 | `Ctrl+A` | 列表视图全选当前视图（输入框内仍是原生全选文本） |
@@ -81,7 +87,7 @@
 
 - 数据文件：`%APPDATA%\MiniTodoElectron\todos.json`（UTF-8 明文，无 BOM，可直接备份/编辑）
 - 首次运行会写入一套示例数据；清空该文件后重启即回到示例数据
-- 备份：`%APPDATA%\MiniTodoElectron\backups\todos-<时间戳>.json`，每天最多一份，保留最新 10 份
+- 备份：`%APPDATA%\MiniTodoElectron\backups\todos-<时间戳>.json`，**每天最多一份（每次改动时按需写）**，保留最新 10 份；「文件 → 从备份恢复…」列出全部备份（损坏的会标出并禁用），恢复 = 导入该文件（可选替换/合并，替换后可「撤销」回退），「关于」里也写着备份目录
 - 设置：`%APPDATA%\MiniTodoElectron\settings.json`（主题、到期提醒开关与时间）
 - 数据文件损坏时不会静默覆盖：原文件改名保留为 `todos.json.corrupt-<时间戳>`（保留最新 5 份），并提示原因
 - 旧版数据（`%APPDATA%\MiniTodo\todos.json`）通过「文件 → 导入旧版数据…」导入，导入前自动备份当前数据，并可选「替换」或「合并」（合并按 id 跳过重复项，保留现有任务）
@@ -107,10 +113,10 @@
 npm install          # 前端依赖（vite/vue/vue-tsc/@tauri-apps/cli）
 npm run dev          # 开发模式（tauri dev，热更新）
 npm run build        # 类型检查 + 构建渲染层到 dist/
-npm test             # 共享层纯函数自检（node --test，43 项）
+npm test             # 共享层纯函数自检（node --test，55 项）
 npm run fixtures     # 生成 normalize fixture（Rust 对照用，提交入库）
-npm run test:rust    # Rust 宿主单测（normalize 对照 / 数据 IO / 通知规则等，7 项）
-npm run smoke        # 端到端冒烟（真窗口 29 项：托盘、通知、单实例、崩溃自愈、保存失败注入）
+npm run test:rust    # Rust 宿主单测（normalize 对照 / 数据 IO / 通知规则等，8 项）
+npm run smoke        # 端到端冒烟（真窗口 39 项：托盘、通知、单实例、崩溃自愈、保存失败注入、备份恢复、导出字节）
 npm run icon         # 重新生成图标（resources/icon.png → src-tauri/icons/）
 ```
 
@@ -142,16 +148,29 @@ npm run zip:win7-64
 
 5000 条任务下（同一台机器，`npm run perf` 三次运行的中位数范围；单次运行会受机器负载影响）：
 
-| 交互 | 耗时 |
-| --- | --- |
-| 切换视图 | **24–28 ms** |
-| 切到列表并滚到底 | **35–56 ms** |
-| 完成一条任务 | **118–132 ms** |
-| 拖拽改期 | **118–134 ms** |
-| 新建任务 | **95–108 ms** |
-| 搜索 | **41–51 ms** |
-| 主线程总阻塞 | **0–105 ms**（多数运行 0；最差一次出现 2 个长任务） |
-| DOM 卡片数 / 列表行数 | **60 / 60**（窗口化渲染，模型 5000） |
+| 交互 | 耗时 | 说明 |
+| --- | --- | --- |
+| 切换视图 | **15–21 ms** | |
+| 切到列表并滚到底 | **28–35 ms** | |
+| 完成一条任务 | **14–35 ms** | 同步段 0.2–1.3 ms，其余是索引重建 + 渲染 |
+| 拖拽改期 | **11–36 ms** | |
+| 新建任务 | **10–27 ms** | |
+| 搜索 | **13–28 ms** | |
+| 连续完成 3 条 | **11–94 ms**（500→5000 条） | 3 次变更 2–5 ms，只写一次盘；磁盘往返本身随载荷线性增长 |
+| 主线程总阻塞 | **0 ms**（三档均为 0） | |
+| DOM 卡片数 / 列表行数 | **60 / 60**（窗口化渲染，模型 5000） | |
+
+拆分数据层与渲染层的成本，用审计探针（比总墙钟更能定位回归）：
+
+```bash
+# 逐步骤量 syncMs(同步段) / firstFrameMs(首帧) / saveRoundTripMs(落盘往返) / maxGapMs(最长帧间隔)
+rm -rf tmp/audit-run && mkdir -p tmp/audit-run
+cp tmp/perf-pristine/5000.json tmp/audit-run/todos.json
+TODO_SMOKE=1 TODO_SMOKE_SCRIPT=scripts/perf-audit-probe.js \
+  TODO_SMOKE_OUT=tmp/audit-out.json TODO_SMOKE_ROOT="$PWD" \
+  TODO_DATA_DIR="$PWD/tmp/audit-run" TODO_SMOKE_TIMEOUT=90000 TODO_SMOKE_SETTLE=300 \
+  ./src-tauri/target/x86_64-pc-windows-msvc/release/mini-todo.exe
+```
 
 关键设计（改这些地方时注意别退回去）：
 
@@ -161,6 +180,8 @@ npm run zip:win7-64
 - 视图计数/看板列走 `shared/store-index.ts` 的**单次扫描索引**，不是逐视图扫描。**但看板列要走 `query.ts` 的 `columnsForView()`** —— `index.columns` 是全量扫描的结果，直接喂看板会在「今天」视图下仍列出未来日期的列
 - 看板卡片与列表行都是**窗口化渲染**（`lib/virtual.ts`），只渲染可视区
 - 保存时 store 以**序列化字符串**过 IPC（传对象要结构化克隆 7.5 万个对象）；Rust 侧原样字节落盘，不做逐条转换
+- **落盘合并到帧末**：`data.ts` 的 `commit()` 只替换内存里的 store 并把写盘排进 `setTimeout(0)`，同一帧内多次变更只写最后一次（连续完成 3 条从 3 次往返降到 1 次）。`commit()` 因此**不 await 磁盘往返**；需要「已落盘」语义的调用点显式 `await flush()`（烟测大量依赖）。**别在 commit 里加回 await** —— 那会把 1 MB 级别的往返重新压回交互路径
+- **Rust 侧不复制整棵 store**：`store_save` 把解析出的树 move 进 `AppState`（`state.store_scan`），一次深拷贝都不做；托盘计数借用同一棵树算，不走 `store_snapshot()`（后者是整树克隆）。1 MB 载荷下每次保存省掉两次 13 ms 量级的深拷贝
 - 落盘不做逐条 `normalizeStore`（只在导入文件这条不可信路径上做）；Rust 侧的 `normalize_store` 与 TS 版有 fixture 对照测试兜底
 
 ## 内存
@@ -228,8 +249,8 @@ src/renderer/src/lib/todo-api.ts  window.todoAPI → Tauri invoke/event 的桥�
 src/renderer/src/test-api.ts      window.__todoTest（冒烟/性能脚本入口，新增 ready() 就绪闸门）
 
 src-tauri/src/main.rs     入口装配：单实例 / 关闭隐藏 / 页面加载钩子 / 崩溃自愈挂载
-src-tauri/src/commands.rs 9 个 IPC 命令 + 菜单导入导出（永不 reject，{ok,error} 信封）
-src-tauri/src/store_io.rs 原子写 / 损坏隔离 / 每日备份 / 导入导出
+src-tauri/src/commands.rs 12 个 IPC 命令 + 菜单导入导出/备份恢复（永不 reject，{ok,error} 信封）
+src-tauri/src/store_io.rs 原子写 / 损坏隔离 / 每日备份（store_save 触发）/ 导入导出
 src-tauri/src/normalize.rs normalizeStore 的 Rust 移植（与 TS 版 fixture 对照）
 src-tauri/src/seed.rs     首次运行示例数据（2 分组 / 5 清单 / 12 任务）
 src-tauri/src/window.rs   showWindow（破前台锁）/ 关闭隐藏 / ProcessFailed 自愈
@@ -240,7 +261,7 @@ src-tauri/src/smoke.rs    冒烟框架（脚本注入 + mainChecks + 进程指�
 src-tauri/src/metrics.rs  进程树内存/进程数（windows-sys）
 src-tauri/src/tests.rs    宿主单测（fixture 对照 / IO 规则 / 通知真值表等）
 
-scripts/run-smokes.mjs    冒烟运行器（29 步，主进程断言表）
+scripts/run-smokes.mjs    冒烟运行器（39 步，主进程断言表 + 导出文件的字节断言）
 scripts/smoke/step*.js    各步断言（与 Electron 版同一套，仅 step15 一处适配 WebView2）
 scripts/package-win.mjs   单架构打包（tauri build + NSIS + 绿色版 zip + 补丁分发）
 scripts/fetch-webview2-runtime.mjs  WebView2 109 运行时获取与展开

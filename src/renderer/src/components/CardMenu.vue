@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { addDays, today } from '@shared/dates'
-import { completeTodo, moveCard, removeTodos, setStatus, updateTodo } from '@shared/store-ops'
-import { ACTIVE, PRIO_COLOR, PRIO_NAME, type Prio } from '@shared/types'
+import { completeTodo, duplicateTodo, moveCard, removeTodos, setStatus, updateTodo } from '@shared/store-ops'
+import { ACTIVE, INBOX_NAME, PRIO_COLOR, PRIO_NAME, type Prio } from '@shared/types'
 import { mutate, undoLast, state } from '../store/data'
 import { askConfirm, closeCardMenu, requestEdit, toast, ui } from '../store/ui'
 import Icon from './Icon.vue'
 
 const m = computed(() => ui.cardMenu as { id: string; x: number; y: number })
 const item = computed(() => state.store.todos.find((t) => t.id === m.value.id))
+/** 「移动到」选择框的值(打开菜单时为空 = 保持原清单) */
+const cardList = ref('')
 
 const px = (v: number): string => `${v}px`
 
@@ -61,11 +63,30 @@ function edit(): void {
   closeCardMenu()
 }
 
+/** 复制任务:同标题同清单同日期,子任务重置为未完成 */
+function duplicate(): void {
+  const id = m.value.id
+  void mutate((s) => duplicateTodo(s, id)).then(() => toast('已复制为一条新任务'))
+  closeCardMenu()
+}
+
+/** 「移动到」清单(收集箱 = ''),与批量菜单同一个 updateTodo(lid) 路径 */
+function moveToList(): void {
+  const id = m.value.id
+  const lid = cardList.value
+  const name = state.store.lists.find((l) => l.id === lid)?.name ?? INBOX_NAME
+  void mutate((s) => updateTodo(s, id, { lid })).then(() => toast(`已移动到「${name}」`))
+  closeCardMenu()
+}
+
+const lists = computed(() => state.store.lists)
+
 const actions = computed<Action[]>(() => {
   if (!item.value) return []
   const done = item.value.status === 1
   return [
     { label: '编辑', icon: 'edit', run: edit },
+    { label: '复制任务', icon: 'copy', run: duplicate },
     { label: '改期到今天', icon: 'today', run: () => reschedule(today(), '今天') },
     { label: '改期到明天', icon: 'tmr', run: () => reschedule(addDays(today(), 1), '明天') },
     { label: '改期到后天', icon: 'calendar', run: () => reschedule(addDays(today(), 2), '后天') },
@@ -113,6 +134,13 @@ watch(item, (v) => {
           >
             <Icon :name="p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow'" :size="13" :style="{ color: PRIO_COLOR[p] }" />
           </button>
+        </div>
+        <div class="row-select">
+          <span class="lbl">移动到</span>
+          <select v-model="cardList" data-testid="card-menu-list" @change="moveToList">
+            <option value="">{{ INBOX_NAME }}</option>
+            <option v-for="l in lists" :key="l.id" :value="l.id">{{ l.name }}</option>
+          </select>
         </div>
       </div>
     </div>
@@ -174,6 +202,23 @@ watch(item, (v) => {
   padding: 4px 6px;
   border-top: 1px solid var(--line);
   margin-top: 4px;
+}
+
+/* 「移动到」一行:与 BulkMenu 同款,保持两处右键/批量菜单外观一致 */
+.row-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 2px;
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.row-select select {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .mini {

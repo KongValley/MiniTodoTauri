@@ -69,6 +69,22 @@ impl AppState {
         *self.store.lock() = Some(v);
     }
 
+    /// 接管一版新的 store（`park`）并就地扫描出结果。
+    ///
+    /// 为什么不用 `set_store` + `due_count`：`due_count` 走 `store_snapshot()`，那是整棵
+    /// Value 的深拷贝（1 MB 载荷实测约 13 ms）。这里把值 move 进锁内、借用着扫描，
+    /// "先接管再统计"的语序不变，但一次拷贝都不做。
+    pub fn store_scan<T>(&self, f: impl FnOnce(&Value) -> T, fallback: T, park: Option<Value>) -> T {
+        let mut guard = self.store.lock();
+        if let Some(value) = park {
+            *guard = Some(value);
+        }
+        match guard.as_ref() {
+            Some(s) => f(s),
+            None => fallback,
+        }
+    }
+
     pub fn settings_snapshot(&self) -> Value {
         self.settings.lock().clone()
     }
@@ -78,9 +94,7 @@ impl AppState {
     }
 
     pub fn due_count(&self) -> usize {
-        match self.store_snapshot() {
-            Some(s) => crate::scan::count_due(&s),
-            None => 0,
-        }
+        // 借用扫描,不走 store_snapshot():后者每次调用都深拷贝整棵树
+        self.store_scan(crate::scan::count_due, 0, None)
     }
 }

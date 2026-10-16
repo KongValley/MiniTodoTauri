@@ -15,6 +15,8 @@ pub fn build_app_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         .text("file-import-old", "导入旧版数据…")
         .text("file-import-json", "导入 JSON…")
         .text("file-export", "导出数据…")
+        .text("file-export-text", "导出为 Markdown / CSV…")
+        .text("file-restore-backup", "从备份恢复…")
         .separator()
         .text("file-open-dir", "打开数据目录")
         .separator()
@@ -60,6 +62,12 @@ pub fn on_menu_event(app: &AppHandle, id: &str) {
         "file-import-old" => commands::menu_import(app, Some(crate::paths::old_store_path())),
         "file-import-json" => commands::menu_import(app, None),
         "file-export" => commands::menu_export(app),
+        "file-export-text" => {
+            let _ = app.emit("ui:open-dialog", json!(["export"]));
+        }
+        "file-restore-backup" => {
+            let _ = app.emit("ui:open-dialog", json!(["backup"]));
+        }
         "file-open-dir" => commands::open_data_dir(app),
         "file-quit" => commands::quit_app(app),
         "view-board" => {

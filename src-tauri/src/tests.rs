@@ -303,6 +303,26 @@ fn store_io_rules() {
     assert!(store_io::assert_store_shape(&json!({ "groups": 1, "lists": [], "todos": [] })).is_err());
     assert!(store_io::assert_store_shape(&json!("x")).is_err());
 
+    // 「关于」文案必须给出备份目录与恢复入口（用户得知道备份去哪找）
+    let about = crate::commands::about_detail();
+    assert!(about.contains("备份目录："), "关于文案缺备份目录: {about}");
+    assert!(about.contains(&paths::backup_dir().display().to_string()));
+    assert!(about.contains("从备份恢复"));
+    assert!(about.contains("保留最新 10 份"));
+
     let _ = std::fs::remove_dir_all(&dir);
     std::env::remove_var("TODO_DATA_DIR");
+}
+
+#[test]
+fn export_file_name_is_sanitized() {
+    use crate::commands::safe_file_name;
+    assert_eq!(safe_file_name("迷你待办-已完成-2026-10-16", "md", "x"), "迷你待办-已完成-2026-10-16.md");
+    assert_eq!(safe_file_name("名字.md", "md", "x"), "名字.md", "已有扩展名不重复追加");
+    // Windows 非法字符与路径分隔符一律剔除：少一个 ':' 就写不进去，'..' 也逃不出目标目录
+    assert_eq!(safe_file_name(r#"a:b*c?d"e<f>g|h\i/j"#, "csv", "x"), "abcdefghij.csv");
+    assert_eq!(safe_file_name("   ", "md", "迷你待办-导出"), "迷你待办-导出.md", "空名回退默认");
+    let long = safe_file_name(&"字".repeat(200), "csv", "x");
+    assert_eq!(long.chars().count(), 84, "截断到 80 字符 + '.csv'");
+    assert!(long.ends_with(".csv"));
 }

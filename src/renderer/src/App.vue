@@ -10,10 +10,12 @@ import TaskDialog from './components/TaskDialog.vue'
 import GroupListDialog from './components/GroupListDialog.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import HelpDialog from './components/HelpDialog.vue'
+import BackupDialog from './components/BackupDialog.vue'
+import ExportDialog from './components/ExportDialog.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import CardMenu from './components/CardMenu.vue'
 import Toast from './components/Toast.vue'
-import { init, state, commit } from './store/data'
+import { init, state, commit, captureUndo, undoLast } from './store/data'
 import { startClock } from './store/index'
 import { applyTheme, refreshSettings } from './store/settings'
 import { askConfirm, toast, ui } from './store/ui'
@@ -42,6 +44,8 @@ onMounted(async () => {
     const kind = args[0] as string
     if (kind === 'settings') ui.settingsOpen = true
     else if (kind === 'help') ui.helpOpen = true
+    else if (kind === 'backup') ui.backupOpen = true
+    else if (kind === 'export') ui.exportOpen = true
     else if (kind === 'warning') toast(String(args[1] ?? '数据文件异常'))
     else if (kind === 'imported') {
       const c = args[1] as { groups: number; lists: number; todos: number } | undefined
@@ -51,16 +55,20 @@ onMounted(async () => {
       const c = args[1] as { store: Store; counts: { groups: number; lists: number; todos: number } }
       askConfirm(
         '导入数据',
-        `文件包含 ${c.counts.groups} 个分组 / ${c.counts.lists} 个清单 / ${c.counts.todos} 条任务。\n「替换」会丢弃当前全部数据（导入前已自动备份）；「合并」保留现有任务，同 id 的条目跳过。`,
+        `文件包含 ${c.counts.groups} 个分组 / ${c.counts.lists} 个清单 / ${c.counts.todos} 条任务。\n「替换」会丢弃当前全部数据（当天已有一份自动备份，替换后还能点底部「撤销」回退）；「合并」保留现有任务，同 id 的条目跳过。`,
         () => {
-          void commit(c.store).then(() => toast('已替换'))
+          captureUndo()
+          void commit(c.store).then(() => toast('已替换', { label: '撤销', run: () => void undoLast() }))
         },
         {
           label: '合并进当前数据',
           onOk: () => {
             const { store, skipped } = mergeStore(state.store, c.store)
             const s = skipped.groups + skipped.lists + skipped.todos
-            void commit(store).then(() => toast(s > 0 ? `已合并，跳过 ${s} 条重复` : '已合并'))
+            captureUndo()
+            void commit(store).then(() =>
+              toast(s > 0 ? `已合并，跳过 ${s} 条重复` : '已合并', { label: '撤销', run: () => void undoLast() })
+            )
           }
         }
       )
@@ -94,6 +102,8 @@ onBeforeUnmount(() => {
     <TaskDialog v-if="ui.dialog" :key="ui.dialog.seq" />
     <SettingsDialog v-if="ui.settingsOpen" />
     <HelpDialog v-if="ui.helpOpen" />
+    <BackupDialog v-if="ui.backupOpen" />
+    <ExportDialog v-if="ui.exportOpen" />
     <ConfirmDialog v-if="ui.confirm" />
     <CardMenu v-if="ui.cardMenu" />
     <Toast v-if="ui.toast" :text="ui.toast.text" :action="ui.toast.action" />

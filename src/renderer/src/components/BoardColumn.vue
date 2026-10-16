@@ -164,8 +164,22 @@ onMounted(() => {
 // 不 disconnect 会让被销毁的列仍被观察,内存只增不减
 onBeforeUnmount(() => ro?.disconnect())
 
-// 每次重渲染后补测新出现的行(高度未知的行才需要,measure 内部会跳过未变化的)
-onUpdated(() => measureAll())
+/**
+ * 每次重渲染后补测新出现的行(高度未知的行才需要,measure 内部会跳过未变化的)。
+ * 一帧内只跑一次:一次变更会让 12 列依次 updated,逐列立即 measureAll 就是 12 次强制布局;
+ * 合并到下一帧末尾,一次布局即可读到所有列的新高度。
+ */
+let measureScheduled = false
+function scheduleMeasure(): void {
+  if (measureScheduled) return
+  measureScheduled = true
+  requestAnimationFrame(() => {
+    measureScheduled = false
+    measureAll()
+  })
+}
+
+onUpdated(scheduleMeasure)
 
 watch(
   () => props.scrollTop,

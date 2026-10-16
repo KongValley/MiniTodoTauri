@@ -112,6 +112,12 @@ export function columnsForView(index: StoreIndex, view: ViewKey): BoardColumn[] 
 export function sortedByIndex(index: StoreIndex, view: ViewKey, sort: ListSort | null = null): TodoItem[] {
   const nameOf = (lid: string): string => index.listOf.get(lid)?.name ?? INBOX_NAME
   if (sort === null) {
+    // 「已完成」按完成时间倒序（最近完成的最上面）。doneAt 缺失的旧数据视作 0，
+    // 沉到最后 —— 它们没有可比的时间，混在中间反而看不出顺序。
+    // 用户点了列头则以其排序为准（下面的分支）。
+    if (view === 'done') {
+      return hitsFor(index, view).sort((x, y) => (y.doneAt ?? 0) - (x.doneAt ?? 0))
+    }
     return hitsFor(index, view).sort((x, y) => {
       const kx = dateKey(x.date)
       const ky = dateKey(y.date)

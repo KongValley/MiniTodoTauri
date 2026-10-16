@@ -48,6 +48,10 @@ export const ui = reactive({
   meta: null as MetaState | null,
   settingsOpen: false,
   helpOpen: false,
+  /** 从备份恢复面板;null 语义由 false 表达 */
+  backupOpen: false,
+  /** 导出 Markdown / CSV 面板 */
+  exportOpen: false,
   confirm: null as ConfirmState | null,
   /** 底部提示;null = 不显示。可带一个动作按钮(删除后的「撤销」) */
   toast: null as ToastState | null,
@@ -56,7 +60,9 @@ export const ui = reactive({
   /** 任务卡右键菜单位置;null = 关闭 */
   cardMenu: null as { id: string; x: number; y: number } | null,
   /** 列表列排序;null = 默认顺序(日期→优先级→清单→seq) */
-  listSort: null as ListSort | null
+  listSort: null as ListSort | null,
+  /** 看板横向滚动请求:seq 自增触发 BoardView 的 watch(方向键用,滚动宽度只有它知道) */
+  boardScroll: { delta: 0, seq: 0 }
 })
 
 let toastTimer: number | undefined
@@ -127,4 +133,9 @@ export function requestEditList(id: string, name: string, gid: string, color: st
 
 export function closeMeta(): void {
   ui.meta = null
+}
+
+/** 看板左右滚动一列(delta 为 ±1);整体替换对象,保持不可变风格 */
+export function boardScrollBy(delta: number): void {
+  ui.boardScroll = { delta, seq: ui.boardScroll.seq + 1 }
 }

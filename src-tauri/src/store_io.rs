@@ -149,7 +149,8 @@ pub fn save_store(bytes: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
-fn list_backups() -> Vec<PathBuf> {
+/// 全部备份文件，按 mtime 倒序（最新在前）。「从备份恢复」列表与每天去重都读它。
+pub fn list_backups() -> Vec<PathBuf> {
     let dir = paths::backup_dir();
     let Ok(rd) = fs::read_dir(&dir) else { return vec![] };
     let mut v: Vec<PathBuf> = rd
@@ -169,7 +170,8 @@ fn write_pretty(path: &Path, value: &Value) -> Result<(), String> {
 /// 每天最多备份一份；超出 BACKUP_KEEP 份时删最旧（写入前先 mkdir，无论是否新建都修剪）
 pub fn backup_if_due(store: &Value) -> Result<Option<PathBuf>, String> {
     let dir = paths::backup_dir();
-    let existing = list_backups();
+    // 只扫一次目录:此前「是否已备份」与「修剪旧备份」各扫一遍,而这条路径每次保存都要走
+    let mut existing = list_backups();
     let stamp = dates::stamp();
     let today_tag = stamp[..8].to_string();
     let already_today = existing.iter().any(|p| {
@@ -182,10 +184,12 @@ pub fn backup_if_due(store: &Value) -> Result<Option<PathBuf>, String> {
     if !already_today {
         let path = dir.join(format!("todos-{stamp}.json"));
         write_pretty(&path, store)?;
+        // 刚写的是最新一份,直接插到列表头(下接修剪),不必再跑一次 read_dir
+        existing.insert(0, path.clone());
         created = Some(path);
     }
 
-    for stale in list_backups().into_iter().skip(BACKUP_KEEP) {
+    for stale in existing.into_iter().skip(BACKUP_KEEP) {
         fs::remove_file(stale).map_err(|e| e.to_string())?;
     }
     Ok(created)
