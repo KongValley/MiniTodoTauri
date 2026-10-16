@@ -64,6 +64,8 @@ export interface TodoItem {
   repeat: RepeatRule
   createdAt: number
   doneAt: number | null
+  /** 进回收站的时刻(ms)；null = 未知(旧数据)或当前不在回收站。用于过期清理 */
+  deletedAt: number | null
 }
 
 export interface Store {
@@ -109,6 +111,9 @@ export const REPEAT_NAME: Record<RepeatKind, string> = {
 
 export const INBOX_NAME = '收集箱'
 export const INBOX_COLOR = '#9AA0A8'
+
+/** 回收站保留天数：超过这个天数的项在启动时被静默清理（deletedAt 缺失的项永不清理） */
+export const TRASH_KEEP_DAYS = 30
 
 /** 可选清单配色;新建清单时取同组尚未占用的第一个 */
 export const LIST_COLORS = ['#3A7AFE', '#7C5CFF', '#F2A33C', '#3C9954', '#12A5B8', '#E8705F', '#8A8F98'] as const

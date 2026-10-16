@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { addDays, label, today } from '@shared/dates'
+import { addDays, label, overdueDays, today } from '@shared/dates'
 import { sortedByIndex, type ListSort, type ListSortKey } from '@shared/query'
 import { INBOX_NAME, PRIO_COLOR, PRIO_NAME, STATUS_NAME, type TodoItem } from '@shared/types'
 import { completeTodo, removeTodos } from '@shared/store-ops'
-import { importFromDialog, mutate } from '../store/data'
+import { importFromDialog, mutate, undoLast } from '../store/data'
 import { clockTick, index } from '../store/index'
-import { askConfirm, openCardMenu, requestEdit, requestNew, ui } from '../store/ui'
+import { askConfirm, openCardMenu, requestEdit, requestNew, toast, ui } from '../store/ui'
 import { clearSelection, selectedIds, setRowSource, setSelection, toggleSelection } from '../lib/selection'
 import { segments } from '../lib/search'
 import { useVirtual } from '../lib/virtual'
+import BulkMenu from './BulkMenu.vue'
 import Icon from './Icon.vue'
 
 /** 行高固定 32px(见样式 .row),虚拟滚动据此窗口化;分段头同高 */
@@ -18,10 +19,15 @@ const ROW_H = 32
 /** 优先级 → 旗标图标名 */
 const prioIcon = (p: number): string => (p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow')
 
+/** 逾期天数:只对未完成任务显示(与卡片同一判据) */
+const odOf = (t: TodoItem): number => (t.status === 0 ? overdueDays(t.date) : 0)
+
 /** 列表行 = 分段头(仅 week7)或任务;虚拟滚动与 Ctrl+A 都基于这个序列 */
 type Row = { kind: 'head'; label: string; count: number } | { kind: 'item'; item: TodoItem }
 
 const lastClicked = ref<string | null>(null)
+/** 批量操作菜单开关(仅列表视图工具条) */
+const bulkOpen = ref(false)
 
 const rows = computed<Row[]>(() => {
   const items = sortedByIndex(index.value, ui.view, ui.listSort)
@@ -166,7 +172,11 @@ function onDeleteSelected(): void {
     purge ? '彻底删除' : '移入回收站',
     purge ? `将彻底删除 ${ids.length} 条任务，无法恢复。` : `将 ${ids.length} 条任务移入回收站。`,
     () => {
-      void mutate((s) => removeTodos(s, ids, purge)).then(() => clearSelection())
+      void mutate((s) => removeTodos(s, ids, purge)).then(() => {
+        clearSelection()
+        // 删除是唯一「一步就回不去」的操作,给 4 秒撤销窗口(整棵 store 快照,连彻底删除也能救回)
+        toast(`已${purge ? '彻底删除' : '移入回收站'} ${ids.length} 条`, { label: '撤销', run: () => void undoLast() })
+      })
     }
   )
 }
@@ -182,9 +192,13 @@ function onOpen(item: TodoItem): void {
       <span class="count">共 {{ itemRows.length }} 条</span>
       <span v-if="selectedIds.size > 0" class="sel">已选 {{ selectedIds.size }} 条</span>
       <span class="spacer" />
+      <button class="btn" data-testid="bulk-menu" :disabled="selectedIds.size === 0" @click.stop="bulkOpen = !bulkOpen">
+        批量…
+      </button>
       <button class="btn danger" data-testid="delete-selected" :disabled="selectedIds.size === 0" @click="onDeleteSelected">
         {{ ui.view === 'trash' ? '彻底删除' : '删除' }}
       </button>
+      <BulkMenu v-if="bulkOpen" :ids="[...selectedIds]" @close="bulkOpen = false" />
     </div>
 
     <div class="head">
@@ -239,7 +253,7 @@ function onOpen(item: TodoItem): void {
                 {{ v.item.item.subtasks.filter((s) => s.done).length }}/{{ v.item.item.subtasks.length }}
               </span>
             </span>
-            <span class="cell date">{{ label(v.item.item.date) }}</span>
+            <span class="cell date">{{ label(v.item.item.date) }}<span v-if="odOf(v.item.item) > 0" class="overdue" data-overdue>逾期 {{ odOf(v.item.item) }} 天</span></span>
             <span class="cell lname"><i class="dot" :style="{ background: colorOf(v.item.item) }" />{{ nameOf(v.item.item) }}</span>
             <span class="cell prio">
               <i class="pi" :style="{ color: PRIO_COLOR[v.item.item.prio] }"><Icon :name="prioIcon(v.item.item.prio)" :size="12" /></i>{{ PRIO_NAME[v.item.item.prio] }}
@@ -262,6 +276,7 @@ function onOpen(item: TodoItem): void {
 }
 
 .toolbar {
+  position: relative; /* 批量菜单以它为定位参照(absolute) */
   display: flex;
   align-items: center;
   gap: 12px;

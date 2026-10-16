@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { VIEWS, VIEW_NAME, type TodoGroup, type TodoList, type ViewKey } from '@shared/types'
+import { VIEWS, VIEW_NAME, TRASH, type TodoGroup, type TodoList, type ViewKey } from '@shared/types'
 import {
   addGroup,
   freeListColor,
   moveGroup,
   moveList,
   removeGroup,
-  removeList
+  removeList,
+  removeTodos
 } from '@shared/store-ops'
-import { mutate, state } from '../store/data'
+import { mutate, state, undoLast } from '../store/data'
 import { index } from '../store/index'
 import { setView } from '../lib/keymap'
 import {
@@ -81,13 +82,27 @@ function onAddList(): void {
 
 /* ---------- 删除 ---------- */
 
+/** 清空回收站:彻底删除全部回收站项,不可恢复,必须二次确认 */
+function onEmptyTrash(): void {
+  const ids = state.store.todos.filter((t) => t.status === TRASH).map((t) => t.id)
+  if (ids.length === 0) {
+    toast('回收站是空的')
+    return
+  }
+  askConfirm('清空回收站', `将彻底删除 ${ids.length} 条任务，无法恢复。`, () => {
+    void mutate((s) => removeTodos(s, ids, true)).then(() =>
+      toast(`已清空回收站（${ids.length} 条）`, { label: '撤销', run: () => void undoLast() })
+    )
+  })
+}
+
 function askRemoveList(l: TodoList): void {
   const n = state.store.todos.filter((t) => t.lid === l.id).length
   const done = (dropTodos: boolean): void => {
     void mutate((s) => removeList(s, l.id, dropTodos).store).then(() => {
       toast(
         dropTodos
-          ? `已删除清单「${l.name}」并移除 ${n} 条任务`
+          ? `已删除清单「${l.name}」，${n} 条任务已移入回收站`
           : n > 0
             ? `已删除清单「${l.name}」，${n} 条任务已移到收集箱`
             : `已删除清单「${l.name}」`
@@ -102,7 +117,7 @@ function askRemoveList(l: TodoList): void {
   }
   askConfirm(
     '删除清单',
-    `「${l.name}」下还有 ${n} 条任务。删除后这些任务怎么办？`,
+    `「${l.name}」下还有 ${n} 条任务。删除后这些任务怎么办？（两条路径都不丢数据）`,
     () => done(true),
     { label: `任务移到收集箱（${n} 条）`, onOk: () => done(false) }
   )
@@ -291,6 +306,15 @@ function markClass(kind: 'group' | 'list', id: string): string {
         <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
         <span class="name">{{ VIEW_NAME[v] }}</span>
         <span class="num">{{ countOf(v) }}</span>
+        <span
+          v-if="v === 'trash' && countOf('trash') > 0"
+          class="act danger"
+          data-testid="empty-trash"
+          title="清空回收站"
+          @click.stop="onEmptyTrash"
+        >
+          <Icon name="trash" :size="12" />
+        </span>
       </button>
     </div>
   </aside>

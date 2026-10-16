@@ -26,7 +26,7 @@ import {
   updateTodo
 } from '@shared/store-ops'
 import type { Store, TodoItem, ViewKey } from '@shared/types'
-import { commit, flush, mutate, reload, state } from './store/data'
+import { cleanupExpiredTrash, commit, flush, mutate, reload, state } from './store/data'
 import { applyTheme, effectiveTheme, setTheme, updateSettings, type Theme } from './store/settings'
 import { closeDialog, requestNew, ui } from './store/ui'
 import { clearSelection, selectedIds } from './lib/selection'
@@ -42,6 +42,8 @@ export interface TodoTestAPI {
   counts: () => { all: number; today: number; due: number; trash: number; done: number }
   flush: () => Promise<unknown>
   reload: () => Promise<void>
+  /** 启动时的回收站过期清理（30 天）；返回清理条数 —— 启动已跑过一次，这里供冒烟手动再触发 */
+  cleanupExpiredTrash: () => Promise<number>
 
   newTask: (patch: Partial<TodoItem>) => Promise<TodoItem>
   editTask: (id: string, patch: Partial<TodoItem>) => Promise<void>
@@ -108,7 +110,8 @@ export function installTestApi(): void {
     counts: () => ({
       all: index.value.counts['all'] ?? 0,
       today: index.value.counts['today'] ?? 0,
-      due: index.value.counts['due'] ?? 0,
+      // due 保留对外名字:语义 = 今天 + 逾期,与 counts['today'] 同源(索引里已合并)
+      due: index.value.counts['today'] ?? 0,
       trash: index.value.counts['trash'] ?? 0,
       done: index.value.counts['done'] ?? 0
     }),
@@ -194,6 +197,7 @@ export function installTestApi(): void {
     openNew: () => requestNew(),
     closeDialog,
 
+    cleanupExpiredTrash,
     isDate,
     label,
     ready: () => state.ready,

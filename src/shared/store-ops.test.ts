@@ -38,6 +38,7 @@ import {
   removeTodos,
   setStatus,
   toggleSubtask,
+  trashExpiredIds,
   updateTodo
 } from './store-ops'
 
@@ -76,6 +77,7 @@ function todo(over: Partial<TodoItem>): TodoItem {
     repeat: { kind: 'none' },
     createdAt: 0,
     doneAt: null,
+    deletedAt: null,
     ...over
   }
 }
@@ -167,8 +169,34 @@ test('week7 是 [今天, 今天+6] 闭区间', () => {
   }
   const idx = buildIndex(store, '')
   assert.equal(idx.counts['week7'], 2, '含第 6 天,不含第 7 天与前一天')
-  assert.equal(idx.counts['today'], 1)
+  assert.equal(idx.counts['today'], 2, '「今天」= 今天 + 逾期(昨天那条也算)')
   assert.equal(idx.counts['inbox'], 0)
+})
+
+test('今天视图含逾期、week7 不含逾期(两处口径必须一致)', () => {
+  const t = today()
+  const store: Store = {
+    ...emptyStore(),
+    todos: [
+      todo({ id: 'od', date: addDays(t, -2), status: ACTIVE }),
+      todo({ id: 'td', date: t, status: ACTIVE }),
+      todo({ id: 'fu', date: addDays(t, 3), status: ACTIVE }),
+      todo({ id: 'old', date: addDays(t, -1), status: DONE })
+    ]
+  }
+  const idx = buildIndex(store, '')
+  assert.deepEqual(
+    hitsFor(idx, 'today').map((x) => x.id),
+    ['od', 'td'],
+    '今天视图:逾期在前(日期升序),已完成的不算'
+  )
+  assert.deepEqual(
+    hitsFor(idx, 'week7').map((x) => x.id),
+    ['td', 'fu'],
+    'week7 仍是 [今天, 今天+6],不含逾期'
+  )
+  assert.equal(idx.counts['today'], 2, '徽标与视图同源')
+  assert.equal(idx.counts['week7'], 2)
 })
 
 test('索引的 list:/group: 计数与搜索', () => {
@@ -284,9 +312,70 @@ test('removeTodos 移入回收站 vs 真删', () => {
   const trashed = removeTodos(store, ['x'], false)
   assert.equal(trashed.todos.length, 2)
   assert.equal(trashed.todos[0]?.status, TRASH)
+  assert.equal(typeof trashed.todos[0]?.deletedAt, 'number', '进回收站写时刻')
   const purged = removeTodos(store, ['x'], true)
   assert.equal(purged.todos.length, 1)
   assert.equal(purged.todos[0]?.id, 'y')
+})
+
+test('离开回收站会清掉 deletedAt(否则恢复后再删会沿用旧时刻被立刻清理)', () => {
+  const now = Date.now()
+  const store: Store = {
+    ...emptyStore(),
+    todos: [todo({ id: 'x', status: TRASH, deletedAt: now - 40 * 86400000 })]
+  }
+  const restored = setStatus(store, 'x', ACTIVE)
+  assert.equal(restored.todos[0]?.deletedAt, null)
+  assert.equal(restored.todos[0]?.status, ACTIVE)
+  // 再删一次必须重新打时刻,而不是沿用 40 天前那个
+  const again = removeTodos(restored, ['x'], false)
+  assert.ok((again.todos[0]?.deletedAt ?? 0) > now - 1000, '重新进回收站用的是当前时刻')
+})
+
+test('trashExpiredIds 只挑过期的:31 天前命中,29 天前与 null 不命中', () => {
+  const now = Date.now()
+  const day = 86400000
+  const store: Store = {
+    ...emptyStore(),
+    todos: [
+      todo({ id: 'old', status: TRASH, deletedAt: now - 31 * day }),
+      todo({ id: 'recent', status: TRASH, deletedAt: now - 29 * day }),
+      todo({ id: 'unknown', status: TRASH, deletedAt: null }),
+      todo({ id: 'active-old', status: ACTIVE, deletedAt: now - 99 * day })
+    ]
+  }
+  assert.deepEqual(trashExpiredIds(store, now), ['old'])
+  assert.deepEqual(trashExpiredIds(store, now + 3 * day), ['old', 'recent'], '再过三天 recent 也过期')
+})
+
+test('搜索覆盖子任务标题 / 清单名 / 分组名', () => {
+  const store: Store = {
+    ...emptyStore(),
+    groups: [{ id: 'g1', name: '工作甲', order: 1 }],
+    lists: [{ id: 'l1', gid: 'g1', name: '清单乙', color: '#3A7AFE', order: 1 }],
+    todos: [
+      todo({ id: 'a', lid: 'l1', title: '无所谓', subtasks: [{ id: 's1', title: '独特子任务丙', done: false }] }),
+      todo({ id: 'b', lid: '', title: '别的' })
+    ]
+  }
+  assert.deepEqual(buildIndex(store, '独特子任务丙').hits.map((x) => x.id), ['a'], '子任务标题命中')
+  assert.deepEqual(buildIndex(store, '清单乙').hits.map((x) => x.id), ['a'], '清单名命中')
+  assert.deepEqual(buildIndex(store, '工作甲').hits.map((x) => x.id), ['a'], '分组名命中')
+  assert.deepEqual(buildIndex(store, '不存在的词').hits.map((x) => x.id), [], '不命中就是空')
+  assert.deepEqual(buildIndex(store, '收集箱').hits.map((x) => x.id), ['b'], '收集箱名也参与(lid 为空)')
+})
+
+test('批量完成(逐条 completeTodo)对重复任务只生成一条下期', () => {
+  const t = today()
+  const store: Store = {
+    ...emptyStore(),
+    todos: [todo({ id: 'r', date: t, repeat: { kind: 'daily' } }), todo({ id: 'n', date: t })]
+  }
+  // 批量操作会把同一条任务喂两次(选中集合与逐条 reduce 的常态),必须幂等
+  const after = ['r', 'n', 'r'].reduce((acc, id) => completeTodo(acc, id), store)
+  assert.equal(after.todos.length, 3, '原 2 条 + 1 条下期')
+  assert.equal(after.todos.filter((x) => x.status === DONE).length, 2)
+  assert.equal(after.todos.filter((x) => x.status === ACTIVE).length, 1, '只生成一条下期')
 })
 
 test('不可变:纯函数不改原对象', () => {
@@ -450,9 +539,9 @@ test('索引的 due 计数与 countDue 判据一致(多 fixture)', () => {
   ]
   for (const c of cases) {
     assert.equal(
-      buildIndex(c.store, '').counts['due'],
+      buildIndex(c.store, '').counts['today'],
       countDue(c.store),
-      `due 计数应与 countDue 一致:${c.name}`
+      `今天计数应与 countDue 一致(都是今天+逾期):${c.name}`
     )
   }
 })
@@ -463,9 +552,9 @@ test('due 不受搜索词影响之外的视图语义(搜索会同时过滤两者
     ...emptyStore(),
     todos: [todo({ title: '甲', date: t }), todo({ title: '乙', date: t })]
   }
-  assert.equal(buildIndex(store, '').counts['due'], 2)
-  // 搜索词命中一条时,due 也只算命中的那条(与 countDue 不同:后者不看搜索词,故此处不比较)
-  assert.equal(buildIndex(store, '甲').counts['due'], 1)
+  assert.equal(buildIndex(store, '').counts['today'], 2)
+  // 搜索词命中一条时,今天计数也只算命中的那条(与 countDue 不同:后者不看搜索词,故此处不比较)
+  assert.equal(buildIndex(store, '甲').counts['today'], 1)
 })
 
 test('label() 五种形态逐字节不变', () => {
@@ -738,7 +827,7 @@ test('分组与清单的新建:order 接在现有最大值之后', () => {
   assert.deepEqual(addList(g2, gid, '  ', '#3A7AFE'), g2, '空白清单名不建')
 })
 
-test('removeList 两种语义:任务移到收集箱 / 连任务一起删', () => {
+test('removeList 两种语义:任务移到收集箱 / 移入回收站', () => {
   const base: Store = {
     ...emptyStore(),
     groups: [{ id: 'g1', name: '工作', order: 1 }],
@@ -756,10 +845,17 @@ test('removeList 两种语义:任务移到收集箱 / 连任务一起删', () =>
   assert.deepEqual(moved.store.todos.length, 3, '任务一条都不少')
   assert.deepEqual(moved.store.todos.map((t) => t.id), ['a', 'b', 'c'], '原顺序不变')
   assert.deepEqual(moved.store.todos.map((t) => t.lid), ['', '', ''], '全部改挂收集箱')
+  assert.deepEqual(moved.store.todos.map((t) => t.status), [ACTIVE, ACTIVE, ACTIVE], '移到收集箱不改状态')
 
   const dropped = removeList(base, 'l1', true)
   assert.deepEqual(dropped.removedTodos, 2)
-  assert.deepEqual(dropped.store.todos.map((t) => t.id), ['c'], '只留不在该清单的任务')
+  assert.deepEqual(dropped.store.todos.map((t) => t.id), ['a', 'b', 'c'], '任务一条都不少(进回收站)')
+  assert.deepEqual(dropped.store.todos.map((t) => t.status), [TRASH, TRASH, ACTIVE], '该清单下的任务进回收站')
+  assert.deepEqual(dropped.store.todos.map((t) => t.lid), ['', '', ''], '不留悬空清单引用')
+  assert.ok(
+    dropped.store.todos.slice(0, 2).every((t) => typeof t.deletedAt === 'number'),
+    '进回收站要写时刻(过期清理依赖它)'
+  )
 })
 
 test('removeGroup 连带删除组内清单,任务移到收集箱且不留悬空 gid', () => {

@@ -8,6 +8,7 @@ import {
   DROPPED,
   LIST_COLORS,
   TRASH,
+  TRASH_KEEP_DAYS,
   type Prio,
   type RepeatKind,
   type RepeatRule,
@@ -71,6 +72,7 @@ function normalizeTodo(raw: unknown, listIds: Set<string>, fallbackSeq: number):
   const kind = str(repeatRaw['kind'], 'none') as RepeatKind
   const anchorRaw = num(repeatRaw['anchorDay'], 0)
   const doneAtRaw = o['doneAt']
+  const deletedAtRaw = o['deletedAt']
 
   const repeat: RepeatRule = { kind: REPEAT_KINDS.includes(kind) ? kind : 'none' }
   if (repeat.kind === 'monthly' && anchorRaw >= 1 && anchorRaw <= 31) repeat.anchorDay = anchorRaw
@@ -88,7 +90,9 @@ function normalizeTodo(raw: unknown, listIds: Set<string>, fallbackSeq: number):
     subtasks: Array.isArray(o['subtasks']) ? o['subtasks'].map(normalizeSubtask) : [],
     repeat,
     createdAt: num(o['createdAt'], Date.now()),
-    doneAt: typeof doneAtRaw === 'number' && Number.isFinite(doneAtRaw) ? doneAtRaw : null
+    doneAt: typeof doneAtRaw === 'number' && Number.isFinite(doneAtRaw) ? doneAtRaw : null,
+    // 旧数据没有这个字段 → null → 永不参与过期清理（零破坏）
+    deletedAt: typeof deletedAtRaw === 'number' && Number.isFinite(deletedAtRaw) ? deletedAtRaw : null
   }
 }
 
@@ -185,7 +189,8 @@ export function seedStore(): Store {
     subtasks: [],
     repeat: { kind: 'none' },
     createdAt: now + i,
-    doneAt: null
+    doneAt: null,
+    deletedAt: null
   }))
 
   return { version: 2, groups, lists, todos }
@@ -213,7 +218,8 @@ export function addTodo(store: Store, patch: Partial<TodoItem>): Store {
     subtasks: [],
     repeat: { kind: 'none' },
     createdAt: Date.now(),
-    doneAt: null
+    doneAt: null,
+    deletedAt: null
   }
   const merged = normalizeTodo({ ...base, ...definedPatch(patch), id: patch.id ?? base.id }, new Set(store.lists.map((l) => l.id)), base.seq)
   // 新建一律落进 ACTIVE,避免调用方传脏 status
@@ -275,7 +281,10 @@ export function setStatus(store: Store, id: string, status: Status): Store {
   return {
     ...store,
     // 非 DONE 一律清 doneAt:恢复出来的任务不该留着旧的完成时间
-    todos: store.todos.map((t) => (t.id === id ? { ...t, status, doneAt: null } : t))
+    // 离开回收站也清 deletedAt:否则下次再删会沿用旧时刻,过期清理会立刻把它扫掉
+    todos: store.todos.map((t) =>
+      t.id === id ? { ...t, status, doneAt: null, deletedAt: status === TRASH ? t.deletedAt : null } : t
+    )
   }
 }
 
@@ -283,10 +292,22 @@ export function setStatus(store: Store, id: string, status: Status): Store {
 export function removeTodos(store: Store, ids: string[], purge: boolean): Store {
   const idSet = new Set(ids)
   if (purge) return { ...store, todos: store.todos.filter((t) => !idSet.has(t.id)) }
+  const now = Date.now()
   return {
     ...store,
-    todos: store.todos.map((t) => (idSet.has(t.id) ? { ...t, status: TRASH } : t))
+    todos: store.todos.map((t) => (idSet.has(t.id) ? { ...t, status: TRASH, deletedAt: now } : t))
   }
+}
+
+/**
+ * 回收站过期项 id：deletedAt 早于 now - TRASH_KEEP_DAYS 天。
+ * deletedAt 为 null（旧数据 / 手工编辑过）的项永不清理 —— 宁可留着也不能误删。
+ */
+export function trashExpiredIds(store: Store, nowMs: number): string[] {
+  const cutoff = nowMs - TRASH_KEEP_DAYS * 86400000
+  return store.todos
+    .filter((t) => t.status === TRASH && t.deletedAt !== null && t.deletedAt < cutoff)
+    .map((t) => t.id)
 }
 
 /**
@@ -477,14 +498,16 @@ export function updateList(store: Store, id: string, patch: Partial<TodoList>): 
 }
 
 /**
- * 删除清单:dropTodos 为 true 连其下任务一起删,为 false 把任务移到收集箱。
- * 两种路径都不丢「任务还存在」这个事实之外的意外数据,且不留悬空 lid。
+ * 删除清单:dropTodos 为 true 时把其下任务**移入回收站**,为 false 时移到收集箱。
+ * 两条路径都不真删任务 —— 恢复入口都在回收站里,用户不会因为点错一个确认框就永久丢数据。
+ * （两种情形都断开 lid:清单已经不存在,留着悬空引用只会在恢复后指向空气。）
  */
 export function removeList(store: Store, id: string, dropTodos: boolean): { store: Store; removedTodos: number } {
   if (!store.lists.some((l) => l.id === id)) return { store, removedTodos: 0 }
   const removedTodos = store.todos.filter((t) => t.lid === id).length
+  const now = Date.now()
   const todos = dropTodos
-    ? store.todos.filter((t) => t.lid !== id)
+    ? store.todos.map((t) => (t.lid === id ? { ...t, lid: '', status: TRASH as Status, deletedAt: now } : t))
     : store.todos.map((t) => (t.lid === id ? { ...t, lid: '' } : t))
   return { store: { ...store, lists: store.lists.filter((l) => l.id !== id), todos }, removedTodos }
 }

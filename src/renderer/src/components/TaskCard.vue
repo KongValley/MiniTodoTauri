@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 
 import { completeTodo, toggleSubtask } from '@shared/store-ops'
+import { overdueDays } from '@shared/dates'
 import { PRIO_COLOR, PRIO_NAME, type TodoItem } from '@shared/types'
 import { mutate } from '../store/data'
 import { openCardMenu, requestEdit, ui } from '../store/ui'
@@ -24,6 +25,8 @@ const isDone = computed(() => props.item.status === 1)
 const hl = computed(() => segments(props.item.title, ui.search))
 const subPct = computed(() => (props.item.subtasks.length ? (subDone.value / props.item.subtasks.length) * 100 : 100))
 const flagName = computed(() => (props.item.prio === 1 ? 'flagHigh' : props.item.prio === 2 ? 'flagMid' : 'flagLow'))
+/** 逾期天数:只对未完成任务显示(已完成/已放弃的历史项不该报「逾期」) */
+const od = computed(() => (props.item.status === 0 ? overdueDays(props.item.date) : 0))
 
 /** ponytail: 展开态只存在组件内;虚拟滚动会卸载屏幕外卡片,滚走即收起,可接受 */
 const expanded = ref(false)
@@ -79,6 +82,7 @@ function onCtx(event: MouseEvent): void {
       </div>
       <div class="meta">
         <span class="date">{{ dateLabel }}</span>
+        <span v-if="od > 0" class="overdue" data-overdue>逾期 {{ od }} 天</span>
         <span class="sep">·</span>
         <span class="list"><i class="dot" :style="{ background: listColor }" />{{ listName }}</span>
         <span v-if="item.subtasks.length > 0" class="subs" data-subs>{{ subDone }}/{{ item.subtasks.length }}</span>

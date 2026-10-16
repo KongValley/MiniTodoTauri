@@ -26,6 +26,18 @@ export interface StoreIndex {
   search: string
 }
 
+/**
+ * 搜索口径:标题 + 备注 + 子任务标题 + 清单名 + 分组名。
+ * 只在搜索词非空时调用(比较方已短路),5000 条档位才不会为不搜索的每次索引重建付拼接成本。
+ * 命中来源不在行的可见文本里时(子任务、分组名)不额外高亮 —— 高亮仍走 lib/search.ts 的单段口径。
+ */
+function haystack(t: TodoItem, listOf: Map<string, TodoList>, groupOf: Map<string, string>): string {
+  const list = listOf.get(t.lid)
+  const parts = [t.title, t.note, list?.name ?? INBOX_NAME, groupOf.get(list?.gid ?? '') ?? '']
+  for (const sub of t.subtasks) parts.push(sub.title)
+  return parts.join(' ')
+}
+
 export function buildIndex(store: Store, search: string): StoreIndex {
   // 循环不变量:全部提到循环外
   const s = search.trim().toLowerCase()
@@ -35,12 +47,13 @@ export function buildIndex(store: Store, search: string): StoreIndex {
 
   const listOf = new Map<string, TodoList>()
   for (const l of store.lists) listOf.set(l.id, l)
+  const groupOf = new Map<string, string>()
+  for (const g of store.groups) groupOf.set(g.id, g.name)
 
   const counts: Record<string, number> = Object.create(null)
   for (const v of ['all', 'today', 'tmr', 'week7', 'inbox', 'done', 'dropped', 'trash']) counts[v] = 0
   // 今天到期或逾期的未完成任务数(与 query.ts 的 countDue 判据逐字一致);
-  // 顺手在这里算掉,StatusBar 就不必每次渲染再扫一遍全表
-  counts['due'] = 0
+  // 「今天」视图/侧栏徽标/状态栏都用它,不再单独维护一个同义的 due 计数
   for (const l of store.lists) {
     counts[`list:${l.id}`] = 0
     counts[`group:${l.gid}`] = 0
@@ -50,7 +63,7 @@ export function buildIndex(store: Store, search: string): StoreIndex {
   const byDate = new Map<string, TodoItem[]>()
 
   for (const t of store.todos) {
-    if (s !== '' && !(t.title + ' ' + t.note).toLowerCase().includes(s)) continue
+    if (s !== '' && !haystack(t, listOf, groupOf).toLowerCase().includes(s)) continue
     hits.push(t)
 
     if (t.status === ACTIVE) {
@@ -65,9 +78,8 @@ export function buildIndex(store: Store, search: string): StoreIndex {
       if (t.date === '') {
         counts['inbox'] = (counts['inbox'] as number) + 1
       } else {
-        // 有日期的未完成任务:今天或已逾期才计入 due
-        if (t.date <= t0) counts['due'] = (counts['due'] as number) + 1
-        if (t.date === t0) counts['today'] = (counts['today'] as number) + 1
+        // 有日期的未完成任务:今天或已逾期计入「今天」(与 today 视图、「今天待办」栏同口径)
+        if (t.date <= t0) counts['today'] = (counts['today'] as number) + 1
         if (t.date === t1) counts['tmr'] = (counts['tmr'] as number) + 1
         if (t.date.length === 10 && t.date >= t0 && t.date <= t6) counts['week7'] = (counts['week7'] as number) + 1
         const arr = byDate.get(t.date)

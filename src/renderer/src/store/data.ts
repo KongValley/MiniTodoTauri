@@ -6,11 +6,11 @@
  * 派生数据统一由 store/index.ts 的 index computed 提供。
  */
 import { markRaw, reactive } from 'vue'
-import { emptyStore, mergeStore } from '@shared/store-ops'
+import { emptyStore, mergeStore, removeTodos, trashExpiredIds } from '@shared/store-ops'
 import type { Store } from '@shared/types'
 import { CH } from '@shared/api'
 import { refreshSettings, type Settings } from './settings'
-import { askConfirm, toast } from './ui'
+import { askConfirm, toast, ui } from './ui'
 
 export const state = reactive({
   store: markRaw(emptyStore()) as Store,
@@ -26,6 +26,9 @@ type SaveResult = { ok: boolean; error?: string }
 
 /** 最近一次保存的 Promise,供冒烟的 flush() 等待落盘 */
 let pending: Promise<SaveResult> = Promise.resolve({ ok: true })
+
+/** 最近一次变更前的 store 快照(仅内存、一步);见 undoLast */
+let undoSnapshot: Store | null = null
 
 export function flush(): Promise<unknown> {
   return pending
@@ -58,7 +61,23 @@ export async function commit(next: Store): Promise<void> {
 
 /** 纯函数式改数据:mutate(s => addTodo(s, {...})) */
 export async function mutate(fn: (s: Store) => Store): Promise<void> {
-  await commit(fn(state.store))
+  const before = state.store
+  const next = fn(before)
+  // 只存引用(零拷贝):撤销窗口是「刚做完的那一步」,删除类操作弹 toast 时才暴露给用户
+  if (next !== before) undoSnapshot = before
+  await commit(next)
+}
+
+/**
+ * 撤销最近一次变更(删除类操作的「撤销」按钮用)。
+ * 只保留一步、只在内存里:够覆盖「手滑删了」这类场景,不值得做多级撤销栈。
+ */
+export async function undoLast(): Promise<boolean> {
+  if (!undoSnapshot) return false
+  const back = undoSnapshot
+  undoSnapshot = null
+  await commit(back)
+  return true
 }
 
 export async function reload(): Promise<void> {
@@ -75,9 +94,21 @@ export async function reload(): Promise<void> {
   state.warning = res.warning ?? ''
 }
 
+/**
+ * 启动时静默清理回收站过期项（deletedAt 早于 TRASH_KEEP_DAYS 天）。
+ * 不弹 toast：启动清理是维护动作，不是用户刚做的操作，没有「撤销」语义。
+ */
+export async function cleanupExpiredTrash(): Promise<number> {
+  const ids = trashExpiredIds(state.store, Date.now())
+  if (ids.length === 0) return 0
+  await mutate((s) => removeTodos(s, ids, true))
+  return ids.length
+}
+
 export async function init(): Promise<void> {
   await reload()
   state.settings = await refreshSettings()
+  await cleanupExpiredTrash()
   state.ready = true
 }
 

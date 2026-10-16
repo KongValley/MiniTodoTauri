@@ -20,6 +20,12 @@ export interface ConfirmState {
   secondary?: { label: string; onOk: () => void }
 }
 
+/** 底部提示:一个短文本 + 可选动作按钮(如删除后的「撤销」) */
+export interface ToastState {
+  text: string
+  action?: { label: string; run: () => void }
+}
+
 /** 分组/清单的新建与重命名弹窗(TaskDialog 的同款快照语义,靠 seq 强制重挂) */
 export interface MetaState {
   mode: 'new-group' | 'edit-group' | 'new-list' | 'edit-list'
@@ -43,7 +49,8 @@ export const ui = reactive({
   settingsOpen: false,
   helpOpen: false,
   confirm: null as ConfirmState | null,
-  toast: '',
+  /** 底部提示;null = 不显示。可带一个动作按钮(删除后的「撤销」) */
+  toast: null as ToastState | null,
   /** 侧栏分组展开状态(手动收起的分组不被切视图自动展开) */
   collapsed: {} as Record<string, boolean>,
   /** 任务卡右键菜单位置;null = 关闭 */
@@ -56,12 +63,18 @@ let toastTimer: number | undefined
 let dialogSeq = 0
 let metaSeq = 0
 
-export function toast(message: string): void {
-  ui.toast = message
+export function toast(message: string, action?: ToastState['action']): void {
+  ui.toast = { text: message, action }
   clearTimeout(toastTimer)
   toastTimer = window.setTimeout(() => {
-    ui.toast = ''
+    ui.toast = null
   }, 4000)
+}
+
+/** 立即收起提示(动作按钮点完就走) */
+export function hideToast(): void {
+  clearTimeout(toastTimer)
+  ui.toast = null
 }
 
 export function requestNew(preset?: { date?: string; list?: string }): void {

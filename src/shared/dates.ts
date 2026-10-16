@@ -51,6 +51,19 @@ export function week(date: string): string {
 }
 
 /**
+ * 逾期天数:未排期 / 非法 / 今天及以后 → 0(「今天」视图靠它给逾期项标红)。
+ * 两端都取本地零点,差值按整天四舍五入 —— 夏令时不适用本机,但半格偏差也不该出现。
+ */
+export function overdueDays(date: string): number {
+  const d = parse(date)
+  if (!d) return 0
+  const now = new Date()
+  const midnight = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const days = Math.round((midnight.getTime() - d.getTime()) / 86400000)
+  return days > 0 ? days : 0
+}
+
+/**
  * 今天 / 明天 / 后天 周X;其他为 'M月d日 周X';'' 或非法 → '未排期'
  *
  * 这里刻意不缓存"今天零点":实测缓存版反而慢 18%(7.17 vs 6.25 ms / 5000 行),

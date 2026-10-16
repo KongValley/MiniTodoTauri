@@ -164,6 +164,14 @@ input[type='checkbox'] {
   scrollbar-width: thin;
 }
 
+/* 逾期标记:卡片与列表行共用(全局类,组件内不重复定义) */
+.overdue {
+  color: var(--danger);
+  font-weight: 600;
+  margin-left: 6px;
+  white-space: nowrap;
+}
+
 /* 低配模式（main.ts 自动判定）：卡片阴影是唯一按项重复的合成开销，关掉；
    html 前缀提升特指度(0,2,1 > scoped 的 0,2,0)，卡片本身还有 1px 边线，视觉不塌。 */
 html[data-perf='low'] [data-card] {

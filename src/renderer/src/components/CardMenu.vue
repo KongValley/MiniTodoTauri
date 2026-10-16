@@ -3,7 +3,7 @@ import { computed, watch } from 'vue'
 import { addDays, today } from '@shared/dates'
 import { completeTodo, moveCard, removeTodos, setStatus, updateTodo } from '@shared/store-ops'
 import { ACTIVE, PRIO_COLOR, PRIO_NAME, type Prio } from '@shared/types'
-import { mutate, state } from '../store/data'
+import { mutate, undoLast, state } from '../store/data'
 import { askConfirm, closeCardMenu, requestEdit, toast, ui } from '../store/ui'
 import Icon from './Icon.vue'
 
@@ -49,7 +49,9 @@ function remove(): void {
     purge ? '彻底删除' : '移入回收站',
     purge ? '将彻底删除 1 条任务，无法恢复。' : '将 1 条任务移入回收站。',
     () => {
-      void mutate((s) => removeTodos(s, [id], purge))
+      void mutate((s) => removeTodos(s, [id], purge)).then(() =>
+        toast(`已${purge ? '彻底删除' : '移入回收站'} 1 条`, { label: '撤销', run: () => void undoLast() })
+      )
     }
   )
 }

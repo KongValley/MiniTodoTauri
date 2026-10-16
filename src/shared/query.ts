@@ -62,7 +62,8 @@ export function hitsFor(index: StoreIndex, view: ViewKey): TodoItem[] {
     case 'all':
       return index.hits.filter((t) => t.status === ACTIVE)
     case 'today':
-      return index.hits.filter((t) => t.status === ACTIVE && t.date === t0)
+      // 今天 + 逾期:与 countDue()/托盘同一口径,逾期任务不再只藏在「所有」里
+      return index.hits.filter((t) => t.status === ACTIVE && t.date !== '' && t.date <= t0)
     case 'tmr': {
       const t1 = addDays(t0, 1)
       return index.hits.filter((t) => t.status === ACTIVE && t.date === t1)

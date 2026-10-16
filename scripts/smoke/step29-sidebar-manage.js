@@ -95,7 +95,7 @@ const kept = t.getState().todos.find((x) => x.id === moved.id)
 truthy(!!kept, '任务仍在(不能丢)')
 eq(kept.lid, '', '任务已改挂收集箱')
 
-/* ---------- 删除清单:连任务一起删 ---------- */
+/* ---------- 删除清单:连任务一起删(现在改走回收站,任务不丢) ---------- */
 const lBiz = t.lists().find((l) => l.name === '待办事务').id
 const doomed = await t.newTask({ title: '要删掉', date: t0, lid: lBiz })
 const keep2 = await t.newTask({ title: '别的清单', date: t0, lid: t.lists().find((l) => l.name === '生活杂事').id })
@@ -107,7 +107,11 @@ document.querySelector('[data-testid="confirm-ok"]').click()
 await t.flush()
 await sleep(200)
 truthy(!t.lists().some((l) => l.id === lBiz), '清单已删除')
-truthy(!t.todos().some((x) => x.id === doomed.id), '该清单下的任务被一并删除')
+const trashed = t.todos().find((x) => x.id === doomed.id)
+truthy(!!trashed, '该清单下的任务不丢(移入回收站)')
+eq(trashed.status, 3, '任务进了回收站')
+eq(trashed.lid, '', '不留悬空清单引用')
+truthy(typeof trashed.deletedAt === 'number', '写了进回收站时刻(过期清理依赖它)')
 truthy(!!t.todos().find((x) => x.id === keep2.id), '别的清单的任务不受影响')
 
 /* ---------- 删除分组:连带清单,任务移到收集箱,不留悬空 gid ---------- */

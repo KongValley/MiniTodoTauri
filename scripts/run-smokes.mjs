@@ -43,7 +43,10 @@ const scripts = [
   'step27-renderer-crash.js',
   'step28-save-fail.js',
   'step29-sidebar-manage.js',
-  'step30-bootlog.js'
+  'step30-bootlog.js',
+  'step31-trash-retention.js',
+  'step32-bulk-undo.js',
+  'step33-search-scope.js'
 ]
 
 if (!existsSync(appExe)) {

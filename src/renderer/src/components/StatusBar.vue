@@ -5,7 +5,8 @@ import { index } from '../store/index'
 import { ui } from '../store/ui'
 
 // 两个计数都取自单次扫描的索引,不再各自扫全表
-const todayCount = computed(() => index.value.counts['due'] ?? 0)
+// 「今天待办」= 今天 + 逾期(与「今天」视图同一口径,两个数字不再互相矛盾)
+const todayCount = computed(() => index.value.counts['today'] ?? 0)
 // 搜索命中数 = 命中搜索词的全部任务(不限视图),与索引的 hits 同义
 const hitCount = computed(() => (ui.search ? index.value.hits.length : null))
 </script>

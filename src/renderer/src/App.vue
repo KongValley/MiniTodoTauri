@@ -96,7 +96,7 @@ onBeforeUnmount(() => {
     <HelpDialog v-if="ui.helpOpen" />
     <ConfirmDialog v-if="ui.confirm" />
     <CardMenu v-if="ui.cardMenu" />
-    <Toast v-if="ui.toast" :text="ui.toast" />
+    <Toast v-if="ui.toast" :text="ui.toast.text" :action="ui.toast.action" />
   </div>
 </template>
 
