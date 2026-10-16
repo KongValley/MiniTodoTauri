@@ -67,7 +67,7 @@
 | `mini-todo-setup-<版本>-<平台>.exe` | **安装版**：双击走安装向导，装到当前用户目录，自动建开始菜单快捷方式 |
 | `mini-todo-portable-<版本>-<平台>.zip` | **绿色版**：解压后双击里面的 exe，无需安装。**建议先建一个专用文件夹再解压**（zip 没有外层目录，直接解压会与当前目录已有文件混在一起） |
 
-两种分发物的启动速度相同（都在本机直接运行，不做解压）。体积参考：安装版约 136 MB（32 位）/ 149 MB（64 位），绿色版约 181/201 MB——包内自带一份 WebView2 109 固定版运行时。
+两种分发物的启动速度相同（都在本机直接运行，不做解压）。体积参考：安装版约 155 MB（32 位）/ 177 MB（64 位），绿色版约 167/187 MB——包内自带一份 WebView2 109 固定版运行时（只保留 `en-US`/`zh-CN` 语言包，其余 82 个已裁掉）。安装包用 NSIS 的 **bzip2** 档（不是默认 LZMA）：比 LZMA 大约 20%，换来每次打包少花约 100 秒。
 
 **Windows 7 前置要求**：需 **Windows 7 SP1**，并补装 `前置补丁/` 里的 4 个 `.msu`（安装顺序见该目录的《安装说明.txt》，先装 KB4490628 再装 KB4474419）。**运行时不需联网、不需单独安装**。
 
@@ -125,12 +125,14 @@ npm run perf         # 三档 × 3 次取中位数，结果写 tmp/perf-current.
 打包（每架构一条，产物在 `release/<中文目录>/`）：
 
 ```bash
-npm run dist:win7-32     # → release/Win7-32位/
-npm run dist:win7-64     # → release/Win7-64位/
-npm run dist             # 两个架构依次全打
+npm run dist             # 两个架构并行打（16 核本机约 2.5 分钟）
+npm run dist:win7-32     # 只打 32 位（→ release/Win7-32位/，约 1.5 分钟）
+npm run dist:win7-64     # 只打 64 位（→ release/Win7-64位/，约 2.5 分钟）
+npm run zip:win7-32      # 快速迭代：只重建 exe + 绿色版 zip，不动安装包（约 1 分钟）
+npm run zip:win7-64
 ```
 
-单组合约 4–5 分钟，大头是 **NSIS 的 LZMA 压缩**（把 ~190MB 的应用+WebView2 运行时压成 ~136MB 安装包，约 3 分钟/组合）；cargo 增量编译约 40 秒、绿色版 zip 约 20 秒。日常只改渲染层时跑单组合即可，别等全套。
+单组合约 1.5–2.5 分钟，四段成本：cargo release 编译 35–80 秒（`codegen-units = 16`，为打包速度放弃了 `1` 的体积收益）、**NSIS bzip2 压缩约 35 秒**（320 MB 载荷；LZMA 档要 136 秒、安装包小 20%）、绿色版 staging 复制 + `Compress-Archive` 约 20 秒、`vue-tsc` 类型检查约 6 秒（vite 由 tauri 的 `beforeBuildCommand` 跑，脚本不再重复跑第二遍）。`npm run dist` 并发跑两个组合：cargo 对 target 目录加锁会自动串行，单核的 makensis/zip 正好与另一组合的编译重叠（11 分钟 → 2.5 分钟）。CI 是 2 核 runner，请继续用 `dist:win7-32` / `dist:win7-64` 单架构串行。
 
 ## 性能
 
@@ -253,7 +255,7 @@ scripts/gen-perf-data.mjs / perf-probe.js / perf-compare.mjs  性能基准
 - 提醒时间用本机时区，不处理跨时区
 - 渲染内核是 WebView2：Win7 上固定为 109（2023 年 1 月后无安全更新，与旧 Electron 22 同样是冻结内核，且版本更高）；Win10/11 跟随系统更新
 - 渲染进程崩溃自动重载（连续崩超 3 次停止重载，需手动重启）；崩溃瞬间未落盘改动会丢
-- 安装包体积 136 MB（32 位）/ 149 MB（64 位），内含 WebView2 固定版运行时
+- 安装包体积 155 MB（32 位）/ 177 MB（64 位），内含 WebView2 固定版运行时
 
 ## 发布（GitHub Actions 云端打包）
 

@@ -1,4 +1,6 @@
-// 单架构打包：node scripts/package-win.mjs <win7-ia32|win7-x64>
+// 单架构打包：node scripts/package-win.mjs <win7-ia32|win7-x64> [--zip-only] [--no-frontend]
+//   --zip-only    快速迭代：跳过 NSIS，只重建 exe + 绿色版 zip（安装包保留上次完整打包的产物）
+//   --no-frontend 渲染层已由 dist-all.mjs 统一构建过：跳过 sync-version/typecheck，并置空 tauri 的 beforeBuildCommand
 // 只出 Win7 双架构（32/64）：包内自带 WebView2 109 固定版运行时 —— Win7 上直接可用，
 // Win10/11 上装同一套包也能跑（检测到系统 WebView2 时优先用系统版，见 src-tauri/src/main.rs）。
 // 各组合 → release/<中文目录>/，含安装包（NSIS exe）与绿色版（zip，解压即用），文件名自明。
@@ -57,9 +59,14 @@ const combos = {
   }
 }
 
-const combo = process.argv[2]
+const args = process.argv.slice(2)
+const zipOnly = args.includes('--zip-only')
+const noFrontend = args.includes('--no-frontend')
+const combo = args.find((a) => !a.startsWith('--'))
 if (!(combo in combos)) {
-  console.error(`用法：node scripts/package-win.mjs <${Object.keys(combos).join('|')}>`)
+  console.error(
+    `用法：node scripts/package-win.mjs <${Object.keys(combos).join('|')}> [--zip-only] [--no-frontend]`
+  )
   process.exit(1)
 }
 const cfg = combos[combo]
@@ -74,10 +81,14 @@ function run(cmd, args) {
 }
 
 // 1) 版本一致性（产物文件名内嵌版本号，两处不一致直接失败）
-execFileSync(process.execPath, [join(root, 'scripts', 'sync-version.mjs')], { cwd: root, stdio: 'inherit' })
+// --no-frontend：dist-all.mjs 已统一跑过一次，避免两个进程同时改写同一批版本文件
+if (!noFrontend) {
+  execFileSync(process.execPath, [join(root, 'scripts', 'sync-version.mjs')], { cwd: root, stdio: 'inherit' })
+}
 
-// 2) 渲染层构建（含类型检查）
-execSync('npm run build', { cwd: root, stdio: 'inherit' })
+// 2) 类型检查。vite 不在这里跑：tauri 的 beforeBuildCommand（`npm run build:web`）会跑一次，
+//    原来的 `npm run build` 等于把渲染层白编两遍。
+if (!noFrontend) execSync('npm run typecheck', { cwd: root, stdio: 'inherit' })
 
 // 3) 运行时必须在位（缺了打出来的包在 Win7 起不来，宁可硬失败）
 {
@@ -96,26 +107,38 @@ if (!existsSync(tauriJs)) {
   console.error(`找不到 Tauri CLI：${tauriJs}（先 npm install）`)
   process.exit(1)
 }
-const buildArgs = [tauriJs, 'build', '--target', cfg.triple, '--bundles', 'nsis']
+const buildArgs = [tauriJs, 'build', '--target', cfg.triple]
+// 快速迭代：跳过 NSIS（solid 压缩是单组合最大的一块），只重建 exe + 绿色版 zip
+buildArgs.push(...(zipOnly ? ['--no-bundle'] : ['--bundles', 'nsis']))
 buildArgs.push('--config', join(root, cfg.overlay))
+if (noFrontend) {
+  // dist-all.mjs 已统一构建过渲染层；置空钩子，免掉两个组合并发重写 dist/（cargo 编译期会读 frontendDist）
+  buildArgs.push('--config', '{"build":{"beforeBuildCommand":null}}')
+}
 run(process.execPath, buildArgs)
 
-// 5) 定位 NSIS 产物 → release/<label>/mini-todo-setup-<ver>-<combo>.exe
-const nsisDir = join(targetDir, 'bundle', 'nsis')
-const setup = existsSync(nsisDir)
-  ? readdirSync(nsisDir)
-      .filter((f) => f.toLowerCase().endsWith('.exe'))
-      .map((f) => join(nsisDir, f))
-      .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]
-  : null
-if (!setup) {
-  console.error(`未找到 NSIS 安装包：${nsisDir}`)
-  process.exit(1)
+if (!zipOnly) {
+  // 5) 定位 NSIS 产物 → release/<label>/mini-todo-setup-<ver>-<combo>.exe
+  const nsisDir = join(targetDir, 'bundle', 'nsis')
+  const setup = existsSync(nsisDir)
+    ? readdirSync(nsisDir)
+        .filter((f) => f.toLowerCase().endsWith('.exe'))
+        .map((f) => join(nsisDir, f))
+        .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)[0]
+    : null
+  if (!setup) {
+    console.error(`未找到 NSIS 安装包：${nsisDir}`)
+    process.exit(1)
+  }
+  rmSync(outDir, { recursive: true, force: true })
+  mkdirSync(outDir, { recursive: true })
+  const setupName = `mini-todo-setup-${pkg.version}-${combo}.exe`
+  renameSync(setup, join(outDir, setupName))
+} else {
+  // 快速模式：安装包保持上次完整打包的产物，不删目录、不 rename
+  mkdirSync(outDir, { recursive: true })
+  console.log('（快速模式：跳过 NSIS，安装包保留上次完整打包的结果）')
 }
-rmSync(outDir, { recursive: true, force: true })
-mkdirSync(outDir, { recursive: true })
-const setupName = `mini-todo-setup-${pkg.version}-${combo}.exe`
-renameSync(setup, join(outDir, setupName))
 
 // 6) 绿色版 zip：组 staging（exe + WebView2 固定版运行时）后压缩
 const appExe = join(targetDir, 'mini-todo.exe')
@@ -161,5 +184,10 @@ rmSync(staging, { recursive: true, force: true })
   writeFileSync(join(patchDir, '安装说明.txt'), PATCH_README, 'utf8')
 }
 
+if (zipOnly) {
+  console.log(
+    '\n[快速模式] 产物仅供本机验证：exe 未走 bundle 流程（无 bundle-type 标记），发布请跑 npm run dist:win7-32 / npm run dist'
+  )
+}
 console.log(`\n完成：release/${cfg.label}/`)
 for (const f of readdirSync(outDir)) console.log(`  ${f}`)

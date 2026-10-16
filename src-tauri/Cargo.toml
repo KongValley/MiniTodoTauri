@@ -39,3 +39,8 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [profile.release]
 strip = true
+lto = "thin"
+# 打包速度优先：codegen-units=1 会把 bin crate 的编译+链接拖到 ~139s/次；
+# 16 是 cargo release 默认并行度（exe 约 5.5MB→6.5MB，包内占比 <0.5%，冷启动读入差异可忽略）
+codegen-units = 16
+panic = "abort"

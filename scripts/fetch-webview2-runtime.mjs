@@ -161,3 +161,24 @@ for (const arch of ['x86', 'x64']) {
     log(`已从 webview2-109/${arch}/ 复制到 ${dst}`)
   }
 }
+
+// 修剪语言包：Chromium 按需加载 locale pak，缺了会回落 en-US；其余 82 个 pak 约 80MB，
+// 全是老机器上的安装/首扫负担（x86 目录 395MB → ~315MB）。保留表一处可改。
+const KEEP_LOCALES = ['en-us.pak', 'zh-cn.pak']
+function pruneLocales(outDir) {
+  const dir = join(outDir, 'Locales')
+  if (!existsSync(dir)) return
+  let removed = 0
+  let bytes = 0
+  for (const f of readdirSync(dir)) {
+    if (KEEP_LOCALES.includes(f.toLowerCase())) continue
+    const p = join(dir, f)
+    if (!statSync(p).isFile()) continue
+    bytes += statSync(p).size
+    rmSync(p, { force: true })
+    removed++
+  }
+  if (removed) log(`${outDir}/Locales 移除 ${removed} 个语言包，省 ${(bytes / 1048576).toFixed(0)} MB`)
+}
+pruneLocales(join(root, 'webview2-runtime-x86'))
+pruneLocales(join(root, 'webview2-runtime-x64'))

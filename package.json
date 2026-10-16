@@ -22,7 +22,9 @@
     "perf": "node scripts/perf-compare.mjs current 3",
     "dist:win7-32": "node scripts/package-win.mjs win7-ia32",
     "dist:win7-64": "node scripts/package-win.mjs win7-x64",
-    "dist": "npm run dist:win7-32 && npm run dist:win7-64"
+    "zip:win7-32": "node scripts/package-win.mjs win7-ia32 --zip-only",
+    "zip:win7-64": "node scripts/package-win.mjs win7-x64 --zip-only",
+    "dist": "node scripts/dist-all.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.0",
