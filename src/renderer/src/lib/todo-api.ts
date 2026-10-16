@@ -15,7 +15,8 @@ const CMD: Record<string, string> = {
   'settings:load': 'settings_load',
   'settings:save': 'settings_save',
   'app:version': 'app_version',
-  'app:quit': 'app_quit'
+  'app:quit': 'app_quit',
+  'app:snooze': 'snooze'
 }
 
 async function invoke(channel: string, ...args: unknown[]): Promise<unknown> {

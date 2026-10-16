@@ -10,10 +10,11 @@ use crate::window::{show_window, toggle_window};
 
 pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "tray-show", "显示窗口", true, None::<&str>)?;
+    let snooze = MenuItem::with_id(app, "tray-snooze", "稍后提醒 10 分钟", true, None::<&str>)?;
     let count = MenuItem::with_id(app, "tray-count", "今天 0 项待办", false, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "tray-quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &count, &sep, &quit])?;
+    let menu = Menu::with_items(app, &[&show, &snooze, &count, &sep, &quit])?;
 
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
     let tray = TrayIconBuilder::with_id("tray")
@@ -23,6 +24,9 @@ pub fn create_tray(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "tray-show" => show_window(app),
+            "tray-snooze" => {
+                let _ = crate::commands::snooze(app.clone(), vec![serde_json::json!(10)]);
+            }
             "tray-quit" => crate::commands::quit_app(app),
             _ => {}
         })

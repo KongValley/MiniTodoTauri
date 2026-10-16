@@ -192,16 +192,20 @@ fn settings_normalize_and_hhmm() {
 fn notify_trigger_rules() {
     let anchor = json!({ "theme": "system", "notifyEnabled": true, "notifyAt": "09:00", "lastNotifiedDate": "" });
     use crate::notify::should_notify;
-    assert!(should_notify(&anchor, true, "09:00", "2026-10-15", 1));
-    assert!(should_notify(&anchor, true, "23:59", "2026-10-15", 2));
-    assert!(!should_notify(&anchor, true, "08:59", "2026-10-15", 1), "未到点");
-    assert!(!should_notify(&anchor, true, "09:00", "2026-10-15", 0), "没有待办");
-    assert!(!should_notify(&anchor, false, "09:00", "2026-10-15", 1), "不支持");
+    assert!(should_notify(&anchor, true, "09:00", "2026-10-15", 1, false));
+    assert!(should_notify(&anchor, true, "23:59", "2026-10-15", 2, false));
+    assert!(!should_notify(&anchor, true, "08:59", "2026-10-15", 1, false), "未到点");
+    assert!(!should_notify(&anchor, true, "09:00", "2026-10-15", 0, false), "没有待办");
+    assert!(!should_notify(&anchor, false, "09:00", "2026-10-15", 1, false), "不支持");
     let disabled = json!({ "theme": "system", "notifyEnabled": false, "notifyAt": "09:00", "lastNotifiedDate": "" });
-    assert!(!should_notify(&disabled, true, "09:00", "2026-10-15", 1), "开关未开");
+    assert!(!should_notify(&disabled, true, "09:00", "2026-10-15", 1, false), "开关未开");
     let already = json!({ "theme": "system", "notifyEnabled": true, "notifyAt": "09:00", "lastNotifiedDate": "2026-10-15" });
-    assert!(!should_notify(&already, true, "09:00", "2026-10-15", 1), "同日不重复");
-    assert!(should_notify(&already, true, "09:00", "2026-10-16", 1), "次日可再发");
+    assert!(!should_notify(&already, true, "09:00", "2026-10-15", 1, false), "同日不重复");
+    assert!(should_notify(&already, true, "09:00", "2026-10-16", 1, false), "次日可再发");
+    // 「稍后提醒」到点后穿透「同日不重复」；没到点/开关关着照样不响
+    assert!(should_notify(&already, true, "09:00", "2026-10-15", 1, true), "稍后提醒到点要再发一次");
+    assert!(!should_notify(&disabled, true, "09:00", "2026-10-15", 1, true), "开关关着，稍后提醒也不发");
+    assert!(!should_notify(&already, true, "08:59", "2026-10-15", 1, true), "未到提醒时间，稍后提醒也不发");
 }
 
 #[test]

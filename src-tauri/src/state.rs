@@ -1,6 +1,6 @@
 //! 全局状态（tauri `manage` 注入）。
 
-use std::sync::atomic::{AtomicBool, AtomicUsize};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize};
 
 use parking_lot::Mutex;
 use serde_json::Value;
@@ -20,6 +20,9 @@ pub struct AppState {
     pub last_notification_body: Mutex<Option<String>>,
     /// 通知轮询的停止旗标（退出时置位）
     pub notify_stop: AtomicBool,
+    /// 「稍后提醒」到点时刻（epoch ms，0 = 未设置）。到点后穿透「同日不重复」，再发一次后清零。
+    /// i686 支持 64 位原子（cmpxchg8b），Win7 32 位包也能用。
+    pub snooze_until_ms: AtomicU64,
     /// 托盘句柄与「今天 N 项待办」文本项（刷新计数用）
     pub tray: Mutex<Option<tauri::tray::TrayIcon<tauri::Wry>>>,
     pub tray_count_item: Mutex<Option<tauri::menu::MenuItem<tauri::Wry>>>,
@@ -41,6 +44,7 @@ impl AppState {
             renderer_recovered: AtomicBool::new(false),
             last_notification_body: Mutex::new(None),
             notify_stop: AtomicBool::new(false),
+            snooze_until_ms: AtomicU64::new(0),
             tray: Mutex::new(None),
             tray_count_item: Mutex::new(None),
             theme_items: Mutex::new(None),

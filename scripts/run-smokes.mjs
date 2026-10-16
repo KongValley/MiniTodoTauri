@@ -46,7 +46,8 @@ const scripts = [
   'step30-bootlog.js',
   'step31-trash-retention.js',
   'step32-bulk-undo.js',
-  'step33-search-scope.js'
+  'step33-search-scope.js',
+  'step34-snooze.js'
 ]
 
 if (!existsSync(appExe)) {
@@ -106,7 +107,12 @@ const MAIN_ASSERTIONS = {
       ['窗口先于页面加载显示', at('window_shown') >= 0 && at('window_shown') < at('page_load_finished')],
       ['记录首载内存分解', /mem first_load private=\d+MB/.test(log)]
     ]
-  }
+  },
+  'step34-snooze.js': (mc) => [
+    ['通知确实发出过(前置条件)', typeof mc.notify?.lastBody === 'string' && mc.notify.lastBody.length > 0],
+    ['稍后提醒已写入到点时刻', mc.snoozeUntilMs > 0],
+    ['到点时刻在未来 10 分钟窗口内', mc.snoozeUntilMs > Date.now() && mc.snoozeUntilMs <= Date.now() + 11 * 60000]
+  ]
 }
 
 let failed = 0
@@ -126,7 +132,7 @@ for (const script of scripts) {
       TODO_SMOKE_OUT: outFile,
       TODO_SMOKE_ROOT: root,
       TODO_DATA_DIR: dataDir,
-      TODO_SMOKE_NOTIFY: name === 'step16-tray-notify' ? '1' : '0',
+      TODO_SMOKE_NOTIFY: name === 'step16-tray-notify' || name === 'step34-snooze' ? '1' : '0',
       TODO_SMOKE_CLOSE_PROBE: name === 'step16-tray-notify' ? '1' : '0',
       TODO_SMOKE_SINGLE_INSTANCE: name === 'step18-single-instance' ? '1' : '0',
       TODO_SMOKE_CRASH_PROBE: CRASH_PROBE[script]?.env ?? '0',

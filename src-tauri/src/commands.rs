@@ -138,6 +138,16 @@ pub fn app_quit(app: AppHandle) -> Value {
     json!({ "ok": true })
 }
 
+/// 「稍后提醒 N 分钟」：写入到点时刻，由 notify 轮询穿透「同日不重复」再发一次。
+/// 参数是分钟数，钳到 1..=120 —— 手滑传 0 会变成每分钟提醒一次，传天文数字等于永不提醒。
+#[tauri::command]
+pub fn snooze(app: AppHandle, args: Vec<Value>) -> Value {
+    let minutes = first_arg(&args).as_f64().unwrap_or(10.0).round().clamp(1.0, 120.0) as u64;
+    let until = crate::notify::now_ms() + minutes * 60_000;
+    app.state::<AppState>().snooze_until_ms.store(until, Ordering::SeqCst);
+    json!({ "ok": true, "untilMs": until })
+}
+
 // ---------------------------------------------------------------- 菜单动作
 
 pub fn quit_app(app: &AppHandle) {

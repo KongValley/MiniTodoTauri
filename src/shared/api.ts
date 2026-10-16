@@ -15,6 +15,7 @@ export const CH = {
   settingsSave: 'settings:save',
   appVersion: 'app:version',
   appQuit: 'app:quit',
+  appSnooze: 'app:snooze',
   uiSetBoard: 'ui:set-board',
   uiOpenDialog: 'ui:open-dialog',
   themeSet: 'theme:set'

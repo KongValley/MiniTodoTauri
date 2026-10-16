@@ -19,14 +19,30 @@ pub fn detect_supported() -> bool {
     true
 }
 
-/// 触发条件（与旧版 tick 一致）：
-/// notifyEnabled && supported && lastNotifiedDate != today && 'HH:mm' >= notifyAt && count > 0
-pub fn should_notify(settings_v: &serde_json::Value, supported: bool, now_hm: &str, today: &str, count: usize) -> bool {
+/// 触发条件（与旧版 tick 一致，另加「稍后提醒」穿透）：
+/// notifyEnabled && supported && (lastNotifiedDate != today || snooze_due) && 'HH:mm' >= notifyAt && count > 0
+/// snooze_due = 用户点过「稍后提醒」且已到点 —— 这一条允许同一天再发一次。
+pub fn should_notify(
+    settings_v: &serde_json::Value,
+    supported: bool,
+    now_hm: &str,
+    today: &str,
+    count: usize,
+    snooze_due: bool,
+) -> bool {
     settings::notify_enabled_of(settings_v)
         && supported
-        && settings::last_notified_of(settings_v) != today
+        && (settings::last_notified_of(settings_v) != today || snooze_due)
         && now_hm >= settings::notify_at_of(settings_v).as_str()
         && count > 0
+}
+
+/// 当前时刻的 epoch 毫秒（「稍后提醒」的到点比较用；取不到系统时间就退化成 0 = 未到点）
+pub(crate) fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// 跑一次检查；返回是否发出了通知
@@ -36,13 +52,19 @@ pub fn run_tick(app: &AppHandle) -> bool {
     let today = dates::today();
     let now = dates::now_hm();
     let count = state.due_count();
-    if !should_notify(&settings_v, true, &now, &today, count) {
+    let until = state.snooze_until_ms.load(Ordering::SeqCst);
+    let snooze_due = until != 0 && now_ms() >= until;
+    if !should_notify(&settings_v, true, &now, &today, count, snooze_due) {
         return false;
     }
     let body = format!("今天有 {count} 项待办");
     match app.notification().builder().title("迷你待办").body(&body).show() {
         Ok(_) => {
             *state.last_notification_body.lock() = Some(body);
+            // 只在「这次就是稍后提醒到点」时清掉它：否则日常那次通知会把用户刚设的稍后提醒吃掉
+            if snooze_due {
+                state.snooze_until_ms.store(0, Ordering::SeqCst);
+            }
             let next = settings::merge(&settings_v, &json!({ "lastNotifiedDate": today }));
             let _ = settings::save_to_disk(&next);
             state.set_settings(next);

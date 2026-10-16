@@ -113,6 +113,7 @@ fn main() {
             commands::settings_save,
             commands::app_version,
             commands::app_quit,
+            commands::snooze,
             smoke::smoke_report,
         ])
         .on_menu_event(|app, event| menu::on_menu_event(app, event.id().as_ref()))
