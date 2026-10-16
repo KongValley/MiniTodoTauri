@@ -72,8 +72,15 @@ eq(host.scrollTop, 0, '起始未滚动')
 for (let i = 0; i < 45; i++) key('ArrowDown')
 await sleep(200)
 truthy(host.scrollTop > 0, `45 次 ↓ 后应已滚动(实际 scrollTop=${host.scrollTop})`)
-const firstVisible = Math.floor(host.scrollTop / 32)
-truthy(firstVisible <= 45 && 45 < firstVisible + Math.ceil(host.clientHeight / 32) + 1, '第 45 行落在视口内')
+// 用实际几何判定,不再按行高硬编码(行高变了这套断言不会静默失效)
+const selRow = document.querySelector(`[data-row="${t.selection()[0]}"]`)
+truthy(selRow, '第 45 条选中行已渲染')
+const rowRect = selRow.getBoundingClientRect()
+const boxRect = host.getBoundingClientRect()
+truthy(
+  rowRect.top >= boxRect.top - 1 && rowRect.bottom <= boxRect.bottom + 1,
+  `选中行应完整落在滚动容器可视区内(行 ${rowRect.top.toFixed(1)}..${rowRect.bottom.toFixed(1)} / 容器 ${boxRect.top.toFixed(1)}..${boxRect.bottom.toFixed(1)})`
+)
 
 // 5) 看板 ←→ 滚一列(列宽 300)
 t.setBoard(true)

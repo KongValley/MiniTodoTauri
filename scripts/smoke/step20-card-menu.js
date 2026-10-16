@@ -59,4 +59,57 @@ document.querySelector('[data-testid="confirm-cancel"]').click()
 await sleep(120)
 eq(t.getState().todos.find((x) => x.id === task.id).status, 0, '取消后仍未删除')
 
-return { rescheduled: d1, prio: 1 }
+/* ---------- 右下角:菜单按实测尺寸钳制,不得越出视口 ---------- */
+card.dispatchEvent(
+  new MouseEvent('contextmenu', { bubbles: true, clientX: window.innerWidth - 6, clientY: window.innerHeight - 6 })
+)
+await sleep(200)
+const cornerMenu = document.querySelector('[data-testid="card-menu"]')
+truthy(cornerMenu, '右下角右键仍能开菜单')
+const cr = cornerMenu.getBoundingClientRect()
+truthy(
+  cr.right <= window.innerWidth - 8 + 0.5 && cr.bottom <= window.innerHeight - 8 + 0.5,
+  `菜单应被钳进视口 8px 内(实际 right=${cr.right.toFixed(1)}/${window.innerWidth}, bottom=${cr.bottom.toFixed(1)}/${window.innerHeight})`
+)
+truthy(
+  (getComputedStyle(cornerMenu).maxHeight ?? '') !== 'none',
+  '菜单有最大高度(超高时可滚)'
+)
+eq(getComputedStyle(cornerMenu).overflowY, 'auto', '菜单超高时纵向可滚')
+
+/* ---------- 操作浮层的退出语义 ---------- */
+t.setBoard(false)
+await sleep(250)
+const rowCheck = document.querySelector(`[data-row="${task.id}"] .check input`)
+truthy(!!rowCheck, '列表行的勾选控件存在')
+const rowEl = document.querySelector(`[data-row="${task.id}"]`)
+
+// 焦点移出浮层即收起(不必等 Esc/点击),再开一次拿回焦点
+rowCheck.focus()
+await sleep(250)
+eq(document.querySelector('[data-testid="card-menu"]'), null, '焦点移出浮层后自动收起')
+rowEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 120 }))
+await sleep(250)
+const escMenu = document.querySelector('[data-testid="card-menu"]')
+truthy(!!escMenu, '列表行右键开菜单')
+truthy(escMenu.contains(document.activeElement), '浮层打开后焦点在其第一个可用操作上')
+window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+await sleep(250)
+eq(document.querySelector('[data-testid="card-menu"]'), null, 'Esc 收起浮层')
+eq(document.activeElement, rowCheck, 'Esc 收起后焦点回到触发控件')
+
+// focusout:Tab 离开浮层即收起,且不把焦点拉回来
+rowEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 120 }))
+await sleep(250)
+const tabMenu = document.querySelector('[data-testid="card-menu"]')
+truthy(!!tabMenu, '浮层再次打开')
+const lastItem = [...tabMenu.querySelectorAll('button')].pop()
+lastItem.focus()
+await sleep(80)
+// 模拟 Tab 把焦点搬到浮层外(浏览器默认行为),再让浮层感知
+document.querySelector('[data-testid="search-toggle"]').focus()
+await sleep(250)
+eq(document.querySelector('[data-testid="card-menu"]'), null, '焦点离开浮层后自动收起')
+truthy(document.activeElement !== rowCheck, '收起时不把焦点拉回触发控件(用户已点到别处)')
+
+return { rescheduled: d1, prio: 1, cornerRight: Math.round(window.innerWidth - cr.right) }

@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted } from 'vue'
 import { CH } from '@shared/api'
 import Sidebar from './components/Sidebar.vue'
 import TopBar from './components/TopBar.vue'
+import TaskTools from './components/TaskTools.vue'
 import StatusBar from './components/StatusBar.vue'
 import BoardView from './components/BoardView.vue'
 import ListView from './components/ListView.vue'
@@ -22,6 +23,7 @@ import { askConfirm, toast, ui } from './store/ui'
 import { mergeStore } from '@shared/store-ops'
 import type { Store } from '@shared/types'
 import { useGlobalKeymap } from './lib/keymap'
+import { hasModal } from './lib/dialog-focus'
 
 useGlobalKeymap()
 
@@ -88,14 +90,18 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="shell">
-    <Sidebar />
-    <div class="main">
-      <TopBar />
-      <div class="body" data-testid="body">
-        <BoardView v-if="ui.board" />
-        <ListView v-else />
+    <!-- 弹窗开着时只有这一块 inert:Tab 不能走到遮罩后面,Teleport 出来的弹窗与 Toast 不受影响 -->
+    <div class="workspace" :inert="hasModal ? true : undefined">
+      <Sidebar />
+      <div class="main">
+        <TopBar class="row-top" />
+        <TaskTools class="row-tools" />
+        <div class="body row-body" data-testid="body">
+          <BoardView v-if="ui.board" />
+          <ListView v-else />
+        </div>
+        <StatusBar class="row-status" />
       </div>
-      <StatusBar />
     </div>
 
     <GroupListDialog v-if="ui.meta" :key="ui.meta.seq" />
@@ -112,6 +118,11 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .shell {
+  height: 100%;
+  overflow: hidden;
+}
+
+.workspace {
   display: grid;
   grid-template-columns: 240px 1fr;
   height: 100%;
@@ -119,13 +130,33 @@ onBeforeUnmount(() => {
 
 .main {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  /* TopBar / 快捷录入工具区 / 滚动视图区 / 状态栏 */
+  grid-template-rows: auto auto 1fr auto;
   min-width: 0;
   /* 作为 .shell 的 grid item,min-height 默认 auto 会被内容撑高,
      导致内部滚动容器(看板列/列表)拿不到可视高度,虚拟滚动无从计算窗口 */
   min-height: 0;
   height: 100%;
   overflow: hidden;
+}
+
+/* 行号写死:工具区在「已完成/已放弃/回收站」会整体消失(v-if),
+   靠自动排布的话后面两块会被上提 —— 视图区拿不到确定高度(虚拟滚动失效),
+   状态栏还会被挤到 overflow:hidden 的 main 之外 */
+.main > .row-top {
+  grid-row: 1;
+}
+
+.main > .row-tools {
+  grid-row: 2;
+}
+
+.main > .row-body {
+  grid-row: 3;
+}
+
+.main > .row-status {
+  grid-row: 4;
 }
 
 .body {

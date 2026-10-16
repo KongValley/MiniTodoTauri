@@ -4,13 +4,14 @@
  * 全部动作都复用 store-ops 的纯函数，逐条 reduce 应用 —— 与单条右键菜单同一套语义，
  * 不另写一套批量实现（重复任务的「完成即生成下一期」也因此自动生效）。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { addDays, today } from '@shared/dates'
 import { completeTodo, moveCard, updateTodo } from '@shared/store-ops'
-import { INBOX_NAME, PRIO_COLOR, PRIO_NAME, type Prio, type Store } from '@shared/types'
+import { INBOX_NAME, PRIO_NAME, type Prio, type Store } from '@shared/types'
 import { mutate, state } from '../store/data'
 import { toast } from '../store/ui'
 import { clearSelection } from '../lib/selection'
+import { isComposingEvent } from '../lib/input-events'
 import Icon from './Icon.vue'
 
 const props = defineProps<{ ids: string[] }>()
@@ -21,6 +22,9 @@ const TAIL = Number.MAX_SAFE_INTEGER
 
 const lists = computed(() => state.store.lists)
 const lid = ref('')
+const menuEl = ref<HTMLElement | null>(null)
+/** 打开浮层前谁拿着焦点:Esc 收起时还给它 */
+let trigger: HTMLElement | null = null
 
 function apply(op: (s: Store, id: string) => Store, label: string): void {
   const ids = [...props.ids]
@@ -47,43 +51,92 @@ function onDocClick(): void {
   emit('close')
 }
 
-onMounted(() => document.addEventListener('click', onDocClick))
-onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+/** Esc 收起并把焦点还给「批量…」按钮(挂 window:焦点不在面板里也要能收) */
+function onWindowKeyDown(e: KeyboardEvent): void {
+  if (e.key !== 'Escape' || isComposingEvent(e)) return
+  e.preventDefault()
+  e.stopPropagation()
+  const back = trigger
+  emit('close')
+  void nextTick(() => {
+    if (back && back.isConnected && back !== document.body && !(back as HTMLButtonElement).disabled) back.focus()
+  })
+}
+
+/** 焦点离开浮层:收起,但不把焦点拉回来 */
+function onFocusOut(e: FocusEvent): void {
+  const next = e.relatedTarget as Node | null
+  if (next && menuEl.value?.contains(next)) return
+  emit('close')
+}
+
+onMounted(() => {
+  trigger = document.activeElement as HTMLElement | null
+  document.addEventListener('click', onDocClick)
+  window.addEventListener('keydown', onWindowKeyDown)
+  // 打开即聚焦第一个可用操作
+  void nextTick(() =>
+    menuEl.value?.querySelector<HTMLElement>('button:not([disabled]), select:not([disabled])')?.focus()
+  )
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('keydown', onWindowKeyDown)
+})
 </script>
 
 <template>
-  <div class="menu" data-testid="bulk-menu-panel" role="menu" @click.stop>
-    <button class="mi" data-bulk="complete" role="menuitem" @click="apply((s, id) => completeTodo(s, id), '已标记完成')">
+  <div
+    ref="menuEl"
+    class="menu"
+    data-testid="bulk-menu-panel"
+    role="group"
+    aria-label="批量任务操作"
+    @click.stop
+    @focusout="onFocusOut"
+  >
+    <button class="mi" data-bulk="complete" @click="apply((s, id) => completeTodo(s, id), '已标记完成')">
       <Icon name="check" :size="14" class="mi-ico" />
       <span>完成</span>
     </button>
 
-    <div class="mi-row">
-      <button v-for="p in [1, 2, 3] as const" :key="p" class="mi mini" :data-bulk="PRIO_NAME[p]" role="menuitem" @click="setPrio(p)">
-        <Icon :name="p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow'" :size="13" :style="{ color: PRIO_COLOR[p] }" />
+    <div class="mi-row" role="group" aria-label="设置优先级">
+      <button
+        v-for="p in [1, 2, 3] as const"
+        :key="p"
+        class="mi mini"
+        :class="`p${p}`"
+        :data-bulk="PRIO_NAME[p]"
+        :title="`设为${PRIO_NAME[p]}优先级`"
+        :aria-label="`设为${PRIO_NAME[p]}优先级`"
+        @click="setPrio(p)"
+      >
+        <Icon :name="p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow'" :size="13" />
+        <span>{{ PRIO_NAME[p] }}</span>
       </button>
     </div>
 
-    <button class="mi" data-bulk="today" role="menuitem" @click="reschedule(today(), '今天')">
+    <button class="mi" data-bulk="today" @click="reschedule(today(), '今天')">
       <Icon name="today" :size="14" class="mi-ico" />
       <span>改期到今天</span>
     </button>
-    <button class="mi" data-bulk="tmr" role="menuitem" @click="reschedule(addDays(today(), 1), '明天')">
+    <button class="mi" data-bulk="tmr" @click="reschedule(addDays(today(), 1), '明天')">
       <Icon name="tmr" :size="14" class="mi-ico" />
       <span>改期到明天</span>
     </button>
-    <button class="mi" data-bulk="later" role="menuitem" @click="reschedule(addDays(today(), 2), '后天')">
+    <button class="mi" data-bulk="later" @click="reschedule(addDays(today(), 2), '后天')">
       <Icon name="calendar" :size="14" class="mi-ico" />
       <span>改期到后天</span>
     </button>
-    <button class="mi" data-bulk="unscheduled" role="menuitem" @click="reschedule('', '未排期')">
+    <button class="mi" data-bulk="unscheduled" @click="reschedule('', '未排期')">
       <Icon name="inbox" :size="14" class="mi-ico" />
       <span>清除日期</span>
     </button>
 
     <div class="row-select">
-      <span class="lbl">移动到</span>
-      <select v-model="lid" data-testid="bulk-list" @change="moveToList">
+      <span id="bulk-list-label" class="lbl">移动到</span>
+      <select v-model="lid" data-testid="bulk-list" aria-labelledby="bulk-list-label" @change="moveToList">
         <option value="">{{ INBOX_NAME }}</option>
         <option v-for="l in lists" :key="l.id" :value="l.id">{{ l.name }}</option>
       </select>
@@ -94,15 +147,17 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 <style scoped>
 .menu {
   position: absolute;
-  top: 32px;
+  top: calc(100% + 4px);
   right: 8px;
   z-index: 120;
-  min-width: 176px;
-  padding: 4px;
+  min-width: 184px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-popover);
   text-align: left;
 }
 
@@ -111,9 +166,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 5px 8px;
+  min-height: 32px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: transparent;
   color: var(--text);
   font-size: 13px;
@@ -128,6 +184,18 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   color: var(--text-dim);
 }
 
+.mini.p1 :deep(svg) {
+  color: var(--prio-1);
+}
+
+.mini.p2 :deep(svg) {
+  color: var(--prio-2);
+}
+
+.mini.p3 :deep(svg) {
+  color: var(--prio-3);
+}
+
 .mi-row {
   display: flex;
   gap: 4px;
@@ -138,8 +206,10 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   justify-content: center;
   width: auto;
   flex: 1 1 0;
-  padding: 4px 0;
+  gap: 4px;
   border: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
 .row-select {

@@ -20,12 +20,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'scroll', date: string, top: number): void
-  (e: 'drop', date: string, index: number): void
+  (e: 'drop', date: string, beforeId: string | null): void
   (e: 'add', date: string): void
 }>()
 
 const scroller = ref<HTMLElement | null>(null)
-const dropIndex = ref<number | null>(null)
+const dropActive = ref(false)
 
 /** 桶只在列数据变化时重算,不再每次渲染跑一遍 */
 const buckets = computed(() => bucketsOf(props.column.items))
@@ -53,9 +53,9 @@ const rows = computed<Row[]>(() => {
   return out
 })
 
-/** 估算:卡片本体约 78px(标题 1 行 + meta + 上下 padding),带组标题再加 30px */
-const CARD_ESTIMATE = 78
-const HEAD_ESTIMATE = 30
+/** 估算:卡片本体约 96px(两行标题 + meta + 上下 padding),带组标题再加 32px */
+const CARD_ESTIMATE = 96
+const HEAD_ESTIMATE = 32
 const estimateOf = (r: Row): number => CARD_ESTIMATE + (r.head ? HEAD_ESTIMATE : 0)
 
 const localScrollTop = ref(props.scrollTop)
@@ -70,20 +70,15 @@ const virtual = useVirtual<Row>({
   overscan: 4
 })
 
-/** 同优先级卡片数(拖入空桶时 index = 0)。排除被拖动的那张:
- *  moveCard 的桶也不含自身,两边都排除才叫同一个位置 */
-function samePrioCount(): number {
-  return props.column.items.filter((t) => t.prio === props.dragPrio && t.id !== props.dragId).length
-}
-
 /**
- * 鼠标 Y 落在同优先级卡片中的插入位。
- * 虚拟滚动下未渲染的卡片没有 DOM,因此先定位鼠标落在哪张已渲染卡片上,
- * 再把「渲染序列下标」映射回「该优先级桶内下标」。
+ * 落点锚点:鼠标下半屏落在哪张已渲染卡片之前。
+ * 只认同优先级、且不是被拖动的那张 —— moveCard 的桶语义就是「同日期同优先级」。
+ * 虚拟滚动下未渲染的卡片没有 DOM,所以先定位命中行,再从那里往后找第一张符合的卡;
+ * 找不到(落在最末/空列)返回 null,调用方按桶尾处理。
  */
-function indexFromEvent(event: DragEvent): number {
+function beforeIdFromEvent(event: DragEvent): string | null {
   const host = scroller.value
-  if (!host || props.dragPrio === 0) return samePrioCount()
+  if (!host || props.dragPrio === 0) return null
 
   // 必须查 vrow 包装层而不是 [data-card]:data-row 挂在 vrow 上,
   // 卡片自己没有 → 读不到时 hitRow 恒为末尾,向下拖会被算到桶尾而差一格
@@ -97,29 +92,27 @@ function indexFromEvent(event: DragEvent): number {
     }
   }
 
-  let bucketPos = 0
-  for (let i = 0; i < hitRow && i < rows.value.length; i++) {
-    if ((rows.value[i] as Row).prio === props.dragPrio && (rows.value[i] as Row).item.id !== props.dragId) {
-      bucketPos++
-    }
+  for (let i = Math.max(0, hitRow); i < rows.value.length; i++) {
+    const r = rows.value[i] as Row
+    if (r.prio === props.dragPrio && r.item.id !== props.dragId) return r.item.id
   }
-  return bucketPos
+  return null
 }
 
 function onDragOver(event: DragEvent): void {
   event.preventDefault()
-  dropIndex.value = indexFromEvent(event)
+  dropActive.value = true
 }
 
 function onDragLeave(): void {
-  dropIndex.value = null
+  dropActive.value = false
 }
 
 function onDrop(event: DragEvent): void {
   event.preventDefault()
-  const index = dropIndex.value ?? indexFromEvent(event)
-  dropIndex.value = null
-  emit('drop', props.column.date, index)
+  const beforeId = beforeIdFromEvent(event)
+  dropActive.value = false
+  emit('drop', props.column.date, beforeId)
 }
 
 function onScroll(): void {
@@ -194,7 +187,7 @@ watch(
 </script>
 
 <template>
-  <section class="column" :data-column="column.date" :class="{ dropping: dropIndex !== null }">
+  <section class="column" :data-column="column.date" :class="{ dropping: dropActive }">
     <header class="head">
       <span class="date">{{ label(column.date) }}</span>
       <span class="count">{{ column.items.length }}</span>
@@ -258,26 +251,35 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
+  height: 44px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   flex: 0 0 auto;
 }
 
 .date {
+  font-size: 14px;
   font-weight: 600;
 }
 
+/* 数量胶囊:与卡片里的「子任务」标记同一视觉语言 */
 .count {
-  color: var(--text-mute);
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--text-dim);
+  font-size: 12px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .add {
   margin-left: auto;
-  width: 22px;
-  height: 22px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-control);
   color: var(--text-dim);
   font-size: 15px;
   line-height: 1;
@@ -291,10 +293,11 @@ watch(
   color: var(--accent);
 }
 
+/* 列内留白:卡片间距 10px(margin-bottom) + 12px 内边距,列与列之间不再额外加 margin */
 .content {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 10px;
+  padding: 12px;
   min-height: 0;
 }
 

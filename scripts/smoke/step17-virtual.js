@@ -116,7 +116,13 @@ const longCards = [...longSc.querySelectorAll('[data-card]')]
 const longLast = longCards[longCards.length - 1]
 truthy(longLast, '长列滚到底后应有已渲染卡片')
 const tailGap = longSc.getBoundingClientRect().bottom - longLast.getBoundingClientRect().bottom
-assert(tailGap < 20, `列末空白应小于 20px(实际 ${tailGap.toFixed(1)}px)`)
+// 末尾空白必须恰好等于「容器 padding-bottom + 末卡 margin-bottom」——
+// 虚拟滚动的前缀和只要有累积空洞,这个差就会放大,而不是让阈值去迁就
+const expectedTail = parseFloat(getComputedStyle(longSc).paddingBottom) + parseFloat(getComputedStyle(longLast).marginBottom)
+assert(
+  Math.abs(tailGap - expectedTail) <= 3,
+  `列末空白应等于 padding+末卡 margin(期望 ≈${expectedTail.toFixed(1)}px,实际 ${tailGap.toFixed(1)}px)`
+)
 longSc.scrollTop = 0
 await sleep(200)
 

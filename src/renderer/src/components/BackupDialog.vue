@@ -9,6 +9,7 @@ import { CH } from '@shared/api'
 import { stampLabel } from '@shared/dates'
 import { importFromDialog } from '../store/data'
 import { ui } from '../store/ui'
+import { useDialogFocus } from '../lib/dialog-focus'
 
 interface BackupItem {
   name: string
@@ -22,7 +23,19 @@ interface BackupItem {
 const dir = ref('')
 const items = ref<BackupItem[]>([])
 const loaded = ref(false)
+const rootEl = ref<HTMLElement | null>(null)
 let restoring = false
+
+function closeBackups(): void {
+  ui.backupOpen = false
+}
+
+/** 备份列表是只读的:初始焦点给关闭按钮,不会误触「恢复」 */
+function focusClose(): HTMLElement | null {
+  return rootEl.value?.querySelector<HTMLElement>('[data-testid="backup-close"]') ?? null
+}
+
+const { isTopmost } = useDialogFocus(rootEl, closeBackups, focusClose)
 
 onMounted(async () => {
   const res = (await window.todoAPI.invoke(CH.backupsList)) as {
@@ -56,9 +69,15 @@ function openDir(): void {
 <template>
   <Teleport to="body">
     <!-- z-index 105:低于 ConfirmDialog 的 110,「替换/合并」确认框不会被压在下面 -->
-    <div class="overlay" data-testid="backup-dialog" @click.self="ui.backupOpen = false">
-      <div class="dialog">
-        <h2>从备份恢复</h2>
+    <div class="overlay" data-testid="backup-dialog" :inert="isTopmost ? undefined : true" @click.self="ui.backupOpen = false">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="backup-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="backup-dialog-title">从备份恢复</h2>
         <p class="hint">
           备份目录：{{ dir || '（未知）' }}<br />
           每天首次改动自动写一份，保留最新 10 份。恢复 = 导入该文件：会先让你选「替换 / 合并」，
@@ -99,7 +118,7 @@ function openDir(): void {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -107,20 +126,22 @@ function openDir(): void {
 }
 
 .dialog {
-  width: 520px;
-  max-height: 80vh;
+  width: 560px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
 }
 
 h2 {
-  margin: 0 0 10px;
-  font-size: 15px;
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .hint {
@@ -136,7 +157,7 @@ h2 {
   min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: var(--radius-control);
 }
 
 .empty {
@@ -183,8 +204,9 @@ h2 {
 }
 
 .btn {
-  padding: 5px 12px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
   color: var(--text);

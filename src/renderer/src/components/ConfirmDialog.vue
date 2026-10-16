@@ -1,5 +1,20 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { ui } from '../store/ui'
+import { useDialogFocus } from '../lib/dialog-focus'
+
+const rootEl = ref<HTMLElement | null>(null)
+
+function cancel(): void {
+  ui.confirm = null
+}
+
+/** 二次确认的默认动作是「别做」:初始焦点给取消,回车不会误删 */
+function focusCancel(): HTMLElement | null {
+  return rootEl.value?.querySelector<HTMLElement>('[data-testid="confirm-cancel"]') ?? null
+}
+
+const { isTopmost } = useDialogFocus(rootEl, cancel, focusCancel)
 
 function ok(): void {
   const action = ui.confirm?.onOk
@@ -12,17 +27,19 @@ function onSecondary(): void {
   ui.confirm = null
   action?.()
 }
-
-function cancel(): void {
-  ui.confirm = null
-}
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="overlay" data-testid="confirm-dialog" @click.self="cancel">
-      <div class="dialog">
-        <h2>{{ ui.confirm?.title }}</h2>
+    <div class="overlay" data-testid="confirm-dialog" :inert="isTopmost ? undefined : true" @click.self="cancel">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="confirm-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="confirm-dialog-title">{{ ui.confirm?.title }}</h2>
         <p>{{ ui.confirm?.detail }}</p>
         <div class="foot">
           <span class="spacer" />
@@ -41,7 +58,7 @@ function cancel(): void {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,23 +66,28 @@ function cancel(): void {
 }
 
 .dialog {
-  width: 380px;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
 }
 
 h2 {
-  margin: 0 0 8px;
-  font-size: 15px;
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 p {
-  margin: 0 0 14px;
+  margin: 0 0 20px;
   color: var(--text-dim);
-  line-height: 1.5;
+  line-height: 1.6;
+  white-space: pre-line;
 }
 
 .foot {
@@ -78,8 +100,9 @@ p {
 }
 
 .btn {
-  padding: 5px 14px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
 }

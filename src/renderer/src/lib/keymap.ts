@@ -2,33 +2,25 @@
  * 全局快捷键。结构照 pdf编辑器 的 useGlobalKeymap:
  * onMounted 挂 window keydown,onBeforeUnmount 摘掉。
  */
-import { onBeforeUnmount, onMounted } from 'vue'
+import { onBeforeUnmount, onMounted, nextTick } from 'vue'
 import { addDays, today } from '@shared/dates'
 import type { ViewKey } from '@shared/types'
 import { reload, mutate, state, undoLast } from '../store/data'
 import { updateSettings } from '../store/settings'
-import { askConfirm, boardScrollBy, closeCardMenu, closeDialog, closeMeta, requestEdit, requestNew, toast, ui } from '../store/ui'
+import { askConfirm, boardScrollBy, requestEdit, requestNew, resetTaskFilter, toast, ui } from '../store/ui'
 import { addTodo, duplicateTodo, removeTodos } from '@shared/store-ops'
 import { clearSelection, currentRowIds, moveSelection, selectAll, selectEdge, selectedIds } from './selection'
-
-export function isTypingTarget(target: EventTarget | null): boolean {
-  const el = target as HTMLElement | null
-  if (!el) return false
-  return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable
-}
+import { isComposingEvent, isTypingTarget } from './input-events'
+import { actionPopoverOpen, closeTopDialog } from './dialog-focus'
 
 /**
- * 中文输入法选词中的回车。Vue 的 withKeys 只比对 key,不带这个判断,
- * 选词那一下回车会被当成「保存」——而此时 v-model 还没拿到整段中文。
+ * 新建时的预设日期与清单(与旧版 PresetList 行为一致)。
+ * 「收集箱」视图里新建的是未排期任务,预设日期必须为空 —— 否则收集箱新建会立刻
+ * 带着今天的日期跑掉(收集箱视图的判据就是 date === '')。
  */
-export function isComposingEvent(e: KeyboardEvent): boolean {
-  return e.isComposing || e.keyCode === 229
-}
-
-/** 新建时的预设日期与清单(与旧版 PresetList 行为一致) */
 export function newTaskPreset(): { date: string; list: string } {
   const view = ui.view
-  const date = view === 'tmr' ? addDays(today(), 1) : today()
+  const date = view === 'inbox' ? '' : view === 'tmr' ? addDays(today(), 1) : today()
   let list = ''
   if (view.startsWith('list:')) list = view.slice(5)
   else if (view.startsWith('group:')) {
@@ -39,6 +31,8 @@ export function newTaskPreset(): { date: string; list: string } {
 }
 
 export function setView(view: ViewKey): void {
+  // 换视图 = 换语境,筛选跟着重置;同视图内切看板/列表不动它
+  if (ui.view !== view) resetTaskFilter()
   ui.view = view
   clearSelection()
   // 记住上次视图（启动时由 data.ts 的 restoreLastView 还原）：这里是全应用唯一的视图收口
@@ -75,7 +69,8 @@ const PASTE_MAX = 200
  * 否则会在用户看不见的列表后面静悄悄建一堆。
  */
 function onPaste(event: ClipboardEvent): void {
-  if (isTypingTarget(event.target) || ui.dialog || ui.confirm || ui.meta) return
+  // 弹窗/浮层开着时不动作:否则会在用户看不见的列表后面静悄悄建一堆
+  if (isTypingTarget(event.target) || hasOpenDialog() || actionPopoverOpen()) return
   const text = event.clipboardData?.getData('text') ?? ''
   const lines = text
     .split(/\r?\n/)
@@ -94,43 +89,57 @@ function onPaste(event: ClipboardEvent): void {
   )
 }
 
+/** 七个弹窗标志:任意一个开着,全局快捷键都不该作用到背后的界面 */
+function hasOpenDialog(): boolean {
+  return (
+    ui.dialog !== null ||
+    ui.meta !== null ||
+    ui.confirm !== null ||
+    ui.settingsOpen ||
+    ui.helpOpen ||
+    ui.backupOpen ||
+    ui.exportOpen
+  )
+}
+
+/** 焦点在原生按钮/链接/下拉上:Enter、Space 与导航键属于那个控件的原生行为 */
+function onNativeControl(target: EventTarget | null): boolean {
+  // window/document 也可能是 target(脚本直发事件):它们没有 getAttribute
+  if (!(target instanceof HTMLElement)) return false
+  return (
+    target.tagName === 'BUTTON' ||
+    target.tagName === 'A' ||
+    target.tagName === 'SELECT' ||
+    target.tagName === 'SUMMARY' ||
+    target.getAttribute('role') === 'button'
+  )
+}
+
 export function useGlobalKeymap(): void {
   function onKeyDown(event: KeyboardEvent): void {
+    // 已经有人处理过(弹窗/浮层会 stopPropagation 或 preventDefault),或正在输入法选词:不插手
+    if (event.defaultPrevented || isComposingEvent(event)) return
+
     const ctrl = event.ctrlKey || event.metaKey
     const key = event.key.toLowerCase()
+    const dialog = hasOpenDialog()
+    const popover = actionPopoverOpen()
 
+    // Ctrl+F:弹窗/浮层开着时不动作(否则焦点会被送到遮罩后面);已展开时也重新聚焦一次
     if (ctrl && key === 'f') {
+      if (dialog || popover) return
       event.preventDefault()
       ui.searchOpen = true
+      void nextTick(() => document.querySelector<HTMLInputElement>('[data-testid="search-input"]')?.focus())
       return
     }
 
-    // Escape 从视觉最上层往下关(z-index:CardMenu 120 > Confirm 110 > dialog/settings/help 100)
+    // Escape 从视觉最上层往下关(z-index:CardMenu 120 > Confirm 110 > dialog/settings/help 100)。
+    // 浮层开着时整条 Esc 交给浮层自己(它会把焦点还给触发控件)——见 CardMenu/BulkMenu 的 window 监听。
+    // 弹窗由 dialog-focus 统一认顶层;这里只剩搜索框要收。
     if (event.key === 'Escape') {
-      if (ui.cardMenu) {
-        closeCardMenu()
-        return
-      }
-      if (ui.confirm) {
-        ui.confirm = null
-        return
-      }
-      if (ui.meta) {
-        closeMeta()
-        return
-      }
-      if (ui.dialog) {
-        closeDialog()
-        return
-      }
-      if (ui.settingsOpen) {
-        ui.settingsOpen = false
-        return
-      }
-      if (ui.helpOpen) {
-        ui.helpOpen = false
-        return
-      }
+      if (actionPopoverOpen()) return
+      if (closeTopDialog()) return
       if (ui.searchOpen) {
         ui.searchOpen = false
         ui.search = ''
@@ -138,7 +147,10 @@ export function useGlobalKeymap(): void {
       return
     }
 
+    // F5 在输入框聚焦时也要生效(旧行为):刷新是全局动作,顺带 preventDefault 掉 WebView 的整页重载。
+    // 但弹窗/浮层开着时不动作 —— 那会在用户看不见的地方把数据整个换掉。
     if (event.key === 'F5') {
+      if (dialog || popover) return
       event.preventDefault()
       void reload().then(() => toast('已刷新'))
       return
@@ -146,6 +158,15 @@ export function useGlobalKeymap(): void {
 
     // 输入框聚焦时交还原生行为(否则打字会误触);Ctrl+A 仍保留输入框内的原生全选文本
     if (isTypingTarget(event.target)) return
+
+    // 弹窗/浮层开着时,任务热键不作用于背景界面(F5 与 Ctrl+F 已在上面的分支里各自处理过)
+    if (dialog || popover) return
+
+    // 原生控件上的 Enter/Space/导航键:让那个控件自己去响应(不能顺手把选中任务也打开了)
+    const native = onNativeControl(event.target)
+    if (native && (event.key === 'Enter' || event.key === ' ' || event.key.startsWith('Arrow') || event.key === 'Home' || event.key === 'End')) {
+      return
+    }
 
     // 列表视图全选当前视图;看板下无行源(currentRowIds 返回空)故不生效
     if (ctrl && key === 'a' && !ui.board) {

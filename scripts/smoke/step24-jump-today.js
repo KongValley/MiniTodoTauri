@@ -47,6 +47,7 @@ t.setSearch('远')
 await sleep(250)
 eq(t.boardColumns().length, 0, '搜索无命中时无列')
 eq(document.querySelector('[data-testid="board-today"]'), null, '无列时不显示「今天」钮')
-truthy(document.querySelector('[data-testid="empty-new"]'), '落入看板空状态')
+// 有搜索条件时落入「清除条件」形态的空状态(空结果不再被说成「没有数据」)
+truthy(document.querySelector('[data-testid="clear-task-conditions"]'), '落入看板空状态并给出清除条件入口')
 
 return { todayAt, scrolledTo: host.scrollLeft }

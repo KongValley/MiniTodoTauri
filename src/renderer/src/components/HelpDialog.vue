@@ -1,5 +1,20 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { ui } from '../store/ui'
+import { useDialogFocus } from '../lib/dialog-focus'
+
+const rootEl = ref<HTMLElement | null>(null)
+
+function closeHelp(): void {
+  ui.helpOpen = false
+}
+
+/** 帮助弹窗没有输入项:初始焦点给「关闭」,ESC/回车都能直接收起 */
+function focusClose(): HTMLElement | null {
+  return rootEl.value?.querySelector<HTMLElement>('[data-testid="help-close"]') ?? null
+}
+
+const { isTopmost } = useDialogFocus(rootEl, closeHelp, focusClose)
 
 const ROWS: [string, string][] = [
   ['N', '新建任务'],
@@ -23,9 +38,15 @@ const ROWS: [string, string][] = [
 
 <template>
   <Teleport to="body">
-    <div class="overlay" data-testid="help-dialog" @click.self="ui.helpOpen = false">
-      <div class="dialog" @keydown.esc="ui.helpOpen = false">
-        <h2>快捷键</h2>
+    <div class="overlay" data-testid="help-dialog" :inert="isTopmost ? undefined : true" @click.self="ui.helpOpen = false">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="help-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="help-dialog-title">快捷键</h2>
         <table>
           <tbody>
             <tr v-for="[key, desc] in ROWS" :key="key">
@@ -47,7 +68,7 @@ const ROWS: [string, string][] = [
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,17 +76,21 @@ const ROWS: [string, string][] = [
 }
 
 .dialog {
-  width: 420px;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  width: 520px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
 }
 
 h2 {
-  margin: 0 0 12px;
-  font-size: 15px;
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 table {
@@ -84,8 +109,8 @@ td {
 
 kbd {
   display: inline-block;
-  padding: 2px 7px;
-  border-radius: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--panel);
   font-family: inherit;
@@ -94,11 +119,12 @@ kbd {
 
 .d {
   color: var(--text-dim);
+  line-height: 1.5;
 }
 
 .foot {
   display: flex;
-  margin-top: 12px;
+  margin-top: 16px;
 }
 
 .spacer {
@@ -106,8 +132,9 @@ kbd {
 }
 
 .btn {
-  padding: 5px 14px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
 }

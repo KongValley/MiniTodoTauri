@@ -3,11 +3,24 @@ import { computed, onMounted, ref } from 'vue'
 import { CH } from '@shared/api'
 import { setTheme, settingsState, updateSettings, type Theme } from '../store/settings'
 import { ui } from '../store/ui'
+import { useDialogFocus } from '../lib/dialog-focus'
 
 const version = ref('')
+const rootEl = ref<HTMLElement | null>(null)
 const theme = computed(() => settingsState.value.theme)
 const notifyEnabled = computed(() => settingsState.value.notifyEnabled)
 const notifyAt = computed(() => settingsState.value.notifyAt)
+
+function closeSettings(): void {
+  ui.settingsOpen = false
+}
+
+/** 初次聚焦当前选中的主题按钮:一进来就能用方向键/回车换主题 */
+function focusTheme(): HTMLElement | null {
+  return rootEl.value?.querySelector<HTMLElement>(`[data-theme-opt="${theme.value}"]`) ?? null
+}
+
+const { isTopmost } = useDialogFocus(rootEl, closeSettings, focusTheme)
 
 const THEMES: { value: Theme; label: string }[] = [
   { value: 'system', label: '跟随系统' },
@@ -39,9 +52,15 @@ function openDataDir(): void {
 
 <template>
   <Teleport to="body">
-    <div class="overlay" data-testid="settings-dialog" @click.self="ui.settingsOpen = false">
-      <div class="dialog" @keydown.esc="ui.settingsOpen = false">
-        <h2>设置</h2>
+    <div class="overlay" data-testid="settings-dialog" :inert="isTopmost ? undefined : true" @click.self="ui.settingsOpen = false">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="settings-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="settings-dialog-title">设置</h2>
 
         <section class="block">
           <div class="lbl">主题</div>
@@ -90,7 +109,7 @@ function openDataDir(): void {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -98,17 +117,21 @@ function openDataDir(): void {
 }
 
 .dialog {
-  width: 380px;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
 }
 
 h2 {
-  margin: 0 0 14px;
-  font-size: 15px;
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .block {
@@ -125,13 +148,13 @@ h2 {
   display: flex;
   gap: 0;
   border: 1px solid var(--field-line);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 
 .seg-btn {
   flex: 1 1 0;
-  padding: 6px 0;
+  min-height: 36px;
   color: var(--text);
 }
 
@@ -141,7 +164,7 @@ h2 {
 
 .seg-btn.active {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .inline {
@@ -166,8 +189,9 @@ h2 {
 }
 
 .btn {
-  padding: 5px 14px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
 }

@@ -4,12 +4,13 @@
  * 模板与保存流程照抄 TaskDialog：setup 里对 ui.meta 取一次性快照,
  * 靠 App.vue 上的 :key="ui.meta.seq" 强制重挂;回车保存走 IME 判定。
  */
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { LIST_COLORS } from '@shared/types'
 import { addGroup, addList, renameGroup, updateList } from '@shared/store-ops'
 import { mutate, state } from '../store/data'
 import { closeMeta, ui, type MetaState } from '../store/ui'
-import { isComposingEvent } from '../lib/keymap'
+import { isComposingEvent } from '../lib/input-events'
+import { useDialogFocus } from '../lib/dialog-focus'
 
 const m = ui.meta as MetaState
 
@@ -20,6 +21,20 @@ const form = reactive({
 })
 
 const nameInput = ref<HTMLInputElement | null>(null)
+const rootEl = ref<HTMLElement | null>(null)
+
+/** 初次聚焦名称输入框,光标放末尾(重命名时直接续写) */
+function focusName(): HTMLElement | null {
+  const el = nameInput.value
+  if (el) {
+    el.focus()
+    const end = el.value.length
+    el.setSelectionRange(end, end)
+  }
+  return el
+}
+
+const { isTopmost } = useDialogFocus(rootEl, closeMeta, focusName)
 
 const isGroup = computed(() => m.mode === 'new-group' || m.mode === 'edit-group')
 const title = computed(() =>
@@ -29,8 +44,6 @@ const canSave = computed(() => form.name.trim() !== '')
 const groupOptions = computed(() => state.store.groups.map((g) => ({ id: g.id, name: g.name })))
 /** 一个分组都没有时「所属分组」无从谈起,隐藏该下拉(清单会落在收集箱) */
 const showGroup = computed(() => !isGroup.value && state.store.groups.length > 0)
-
-onMounted(() => void nextTick(() => nameInput.value?.focus()))
 
 /** 选词中的回车不上屏的是半成品名字,不能当保存 */
 function onEnterSave(e: KeyboardEvent): void {
@@ -51,9 +64,15 @@ function save(): void {
 
 <template>
   <Teleport to="body">
-    <div class="overlay" data-testid="meta-dialog" @click.self="closeMeta">
-      <div class="dialog" @keydown.esc="closeMeta">
-        <h2 class="dt">{{ title }}</h2>
+    <div class="overlay" data-testid="meta-dialog" :inert="isTopmost ? undefined : true" @click.self="closeMeta">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="meta-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="meta-dialog-title" class="dt">{{ title }}</h2>
 
         <label class="field">
           <span class="lbl">名称</span>
@@ -98,7 +117,7 @@ function save(): void {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -106,17 +125,21 @@ function save(): void {
 }
 
 .dialog {
-  width: 380px;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
 }
 
 .dt {
-  margin: 0 0 14px;
-  font-size: 15px;
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .field {
@@ -167,8 +190,9 @@ function save(): void {
 }
 
 .btn {
-  padding: 6px 16px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
 }
@@ -185,10 +209,10 @@ function save(): void {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .btn.primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+  box-shadow: var(--shadow-card);
 }
 </style>

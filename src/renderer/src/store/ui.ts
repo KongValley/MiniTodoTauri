@@ -1,13 +1,15 @@
 /** 界面状态(视图 / 搜索 / 弹窗 / 提示) */
 import { reactive } from 'vue'
 import { LIST_COLORS, type ViewKey } from '@shared/types'
-import type { ListSort } from '@shared/query'
+import { DEFAULT_TASK_FILTER, filterActive, type ListSort, type TaskFilter } from '@shared/query'
 
 export interface TaskDialogState {
   mode: 'new' | 'edit'
   id?: string
   presetDate?: string
   presetList?: string
+  /** 快捷录入「详细编辑」转交过来的草稿标题(普通新建/编辑不设) */
+  presetTitle?: string
   /** 每次打开自增:TaskDialog 在 setup 里取一次性快照,改值不重挂载就按 N 没反应。
    *  组件用 :key="ui.dialog.seq" 强制重挂。 */
   seq: number
@@ -61,6 +63,11 @@ export const ui = reactive({
   cardMenu: null as { id: string; x: number; y: number } | null,
   /** 列表列排序;null = 默认顺序(日期→优先级→清单→seq) */
   listSort: null as ListSort | null,
+  /**
+   * 看板/列表的两维筛选。只活在本次会话里(切侧栏视图会重置,重启不恢复):
+   * 它是「现在想看什么」的临时视角,不是数据。
+   */
+  taskFilter: { ...DEFAULT_TASK_FILTER } as TaskFilter,
   /** 看板横向滚动请求:seq 自增触发 BoardView 的 watch(方向键用,滚动宽度只有它知道) */
   boardScroll: { delta: 0, seq: 0 }
 })
@@ -83,8 +90,14 @@ export function hideToast(): void {
   ui.toast = null
 }
 
-export function requestNew(preset?: { date?: string; list?: string }): void {
-  ui.dialog = { mode: 'new', presetDate: preset?.date, presetList: preset?.list, seq: ++dialogSeq }
+export function requestNew(preset?: { date?: string; list?: string; title?: string }): void {
+  ui.dialog = {
+    mode: 'new',
+    presetDate: preset?.date,
+    presetList: preset?.list,
+    presetTitle: preset?.title,
+    seq: ++dialogSeq
+  }
 }
 
 export function requestEdit(id: string): void {
@@ -133,6 +146,22 @@ export function requestEditList(id: string, name: string, gid: string, color: st
 
 export function closeMeta(): void {
   ui.meta = null
+}
+
+/** 清掉两维筛选(整体换新对象,与其余状态同款不可变风格);不动搜索词 */
+export function resetTaskFilter(): void {
+  ui.taskFilter = { ...DEFAULT_TASK_FILTER }
+}
+
+/** 有搜索词或两维筛选在生效:空结果该给「新建」还是「清除条件」全看它 */
+export function hasTaskConditions(): boolean {
+  return ui.search.trim() !== '' || filterActive(ui.taskFilter)
+}
+
+/** 空结果里的「清除搜索和筛选」:两样一起清,不留半截条件 */
+export function clearTaskConditions(): void {
+  ui.search = ''
+  resetTaskFilter()
 }
 
 /** 看板左右滚动一列(delta 为 ±1);整体替换对象,保持不可变风格 */

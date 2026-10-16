@@ -7,24 +7,43 @@ import { computed, ref } from 'vue'
 import { CH } from '@shared/api'
 import { today } from '@shared/dates'
 import { csvOf, markdownOf } from '@shared/export-text'
-import { sortedByIndex, viewTitle } from '@shared/query'
+import { filterActive, sortedByIndex, viewTitle } from '@shared/query'
 import { ACTIVE, INBOX_NAME, TRASH, type ViewKey } from '@shared/types'
 import { state } from '../store/data'
 import { index } from '../store/index'
 import { toast, ui } from '../store/ui'
+import { useDialogFocus } from '../lib/dialog-focus'
 
 const scope = ref<'view' | 'all'>('view')
 const content = ref<'open' | 'all'>('open')
+const rootEl = ref<HTMLElement | null>(null)
 
-const scopeTitle = computed(() => (scope.value === 'all' ? '全部' : viewTitle(state.store, ui.view)))
+function closeExport(): void {
+  ui.exportOpen = false
+}
+
+/** 初始焦点给范围下拉:导出这一步唯一的选择就是「导什么」 */
+function focusScope(): HTMLElement | null {
+  return rootEl.value?.querySelector<HTMLElement>('[data-testid="export-scope"]') ?? null
+}
+
+const { isTopmost } = useDialogFocus(rootEl, closeExport, focusScope)
+
+const filtered = computed(() => filterActive(ui.taskFilter))
+const scopeTitle = computed(() => {
+  if (scope.value === 'all') return '全部'
+  // 有筛选时标题带上后缀:文件名、Markdown 标题、用户回看导出件都靠它区分口径
+  return viewTitle(state.store, ui.view) + (filtered.value ? '-已筛选' : '')
+})
 
 /** 导出用清单名:收集箱('' 的 lid)按 INBOX_NAME 显示 */
 const listNameOf = (lid: string): string =>
   lid === '' ? INBOX_NAME : (state.store.lists.find((l) => l.id === lid)?.name ?? INBOX_NAME)
 
 const rows = computed(() => {
-  // 「全部」范围不看当前视图:内置视图都只筛 ACTIVE(已完成/已放弃各有自己的视图),
-  // 直接取 all 视图会永远导不出已完成项 —— 这里按 未完成 → 已完成 → 已放弃三段拼,
+  // 「全部」范围不看当前视图(也不吃新增的两维筛选:它是「全导」,不是当前视角),
+  // 内置视图都只筛 ACTIVE(已完成/已放弃各有自己的视图),直接取 all 视图会永远
+  // 导不出已完成项 —— 这里按 未完成 → 已完成 → 已放弃三段拼,
   // Markdown 侧还会按日期重新分组,所以段序只影响 CSV 的行序。
   const all =
     scope.value === 'all'
@@ -33,7 +52,7 @@ const rows = computed(() => {
           ...sortedByIndex(index.value, 'done'),
           ...sortedByIndex(index.value, 'dropped')
         ]
-      : sortedByIndex(index.value, ui.view as ViewKey)
+      : sortedByIndex(index.value, ui.view as ViewKey, null, ui.taskFilter)
   // 回收站项不进导出;「仅未完成」再剔掉已完成/已放弃
   return all.filter((t) => (content.value === 'open' ? t.status === ACTIVE : t.status !== TRASH))
 })
@@ -65,15 +84,21 @@ async function exportAs(format: 'md' | 'csv'): Promise<void> {
 
 <template>
   <Teleport to="body">
-    <div class="overlay" data-testid="export-dialog" @click.self="ui.exportOpen = false">
-      <div class="dialog">
-        <h2>导出为文本</h2>
+    <div class="overlay" data-testid="export-dialog" :inert="isTopmost ? undefined : true" @click.self="ui.exportOpen = false">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="export-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="export-dialog-title">导出为文本</h2>
 
         <label class="field">
           <span class="lbl">范围</span>
           <select v-model="scope" data-testid="export-scope">
-            <option value="view">当前视图（{{ viewTitle(state.store, ui.view) }}）</option>
-            <option value="all">全部</option>
+            <option value="view">当前视图（含搜索与筛选）</option>
+            <option value="all">全部（忽略视图与筛选）</option>
           </select>
         </label>
 
@@ -102,7 +127,7 @@ async function exportAs(format: 'md' | 'csv'): Promise<void> {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -111,17 +136,21 @@ async function exportAs(format: 'md' | 'csv'): Promise<void> {
 }
 
 .dialog {
-  width: 420px;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  width: 460px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
 }
 
 h2 {
-  margin: 0 0 14px;
-  font-size: 15px;
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .field {
@@ -157,8 +186,9 @@ h2 {
 }
 
 .btn {
-  padding: 5px 12px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
   color: var(--text);
@@ -172,6 +202,6 @@ h2 {
 .btn.primary {
   border-color: var(--accent);
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 </style>

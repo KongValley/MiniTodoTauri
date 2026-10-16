@@ -52,7 +52,9 @@ const scripts = [
   'step36-done-view.js',
   'step37-input-efficiency.js',
   'step38-export.js',
-  'step39-keynav.js'
+  'step39-keynav.js',
+  'step40-quick-add.js',
+  'step41-task-filter.js'
 ]
 
 if (!existsSync(appExe)) {
@@ -77,10 +79,55 @@ const SAVE_FAIL_PROBE = { 'step28-save-fail.js': { env: '1', settleMs: '300' } }
 
 // 导出步骤：系统保存对话框点不了，注入目录让主进程按默认文件名直写；
 // 字节级断言（BOM / 表头 / 行数）在 Node 侧做 —— 渲染层读不了文件
-const EXPORT_DIRS = { 'step38-export.js': join(tmpDir, 'export-step38') }
+const EXPORT_DIRS = {
+  'step38-export.js': join(tmpDir, 'export-step38'),
+  'step41-task-filter.js': join(tmpDir, 'export-step41')
+}
+
+/** step41 的两份 CSV：同一份夹具导出「当前视图(含筛选)」与「全部」，按标题集合与行结构核对 */
+function exportFilterChecks(dir) {
+  const files = readdirSync(dir).filter((f) => f.endsWith('.csv'))
+  const filtered = files.filter((f) => f.includes('已筛选'))
+  const plain = files.filter((f) => !f.includes('已筛选'))
+  const checks = [
+    ['导出两份 CSV', files.length === 2],
+    ['带筛选的导出件名含「已筛选」', filtered.length === 1]
+  ]
+  if (filtered.length !== 1 || plain.length !== 1) return checks
+
+  const read = (name) => readFileSync(join(dir, name)).toString('utf8')
+  const lines = (text) => text.trimEnd().split('\r\n')
+  const rowOk = (l) => l.startsWith('"') && l.split('","').length === 8
+
+  const one = read(filtered[0])
+  const oneLines = lines(one)
+  checks.push(['筛选导出以 BOM 开头', one.charCodeAt(0) === 0xfeff])
+  checks.push(['筛选导出 = 表头 + 2 条', oneLines.length === 3])
+  checks.push(['筛选导出每行都是 8 个带引号字段', oneLines.slice(1).every(rowOk)])
+  checks.push([
+    '筛选导出只含 A报告/F报告',
+    oneLines
+      .slice(1)
+      .map((l) => l.split('","')[1])
+      .sort()
+      .join('|') === 'A报告|F报告'
+  ])
+
+  const all = read(plain[0])
+  const allLines = lines(all)
+  checks.push(['全部导出 = 表头 + 6 条', allLines.length === 7])
+  checks.push([
+    '全部导出含 A报告…F报告且不含 G/H',
+    ['A报告', 'B报告', 'C报告', 'D报告', 'E报告', 'F报告'].every((x) => all.includes(`"${x}"`)) &&
+      !all.includes('"G报告"') &&
+      !all.includes('"H报告"')
+  ])
+  return checks
+}
 
 /** 导出目录里的文件断言；返回 [标签, 是否通过] */
 function exportFileChecks(script, dir) {
+  if (script === 'step41-task-filter.js') return exportFilterChecks(dir)
   const csv = readdirSync(dir).find((f) => f.endsWith('.csv'))
   const md = readdirSync(dir).find((f) => f.endsWith('.md'))
   const checks = [

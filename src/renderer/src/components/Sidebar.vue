@@ -233,7 +233,7 @@ function markClass(kind: 'group' | 'list', id: string): string {
       </div>
 
       <template v-for="entry in listsByGroup" :key="entry.group.id">
-        <button
+        <div
           class="row group-row"
           :class="[
             { active: isActive(`group:${entry.group.id}` as ViewKey) },
@@ -241,30 +241,46 @@ function markClass(kind: 'group' | 'list', id: string): string {
           ]"
           :data-group="entry.group.id"
           draggable="true"
-          @click="setView(`group:${entry.group.id}` as ViewKey)"
           @dragstart="onDragStart('group', entry.group.id, $event)"
           @dragover.prevent="onDragOver('group', entry.group.id, $event)"
           @drop.prevent="onDrop"
           @dragend="onDragEnd"
         >
-          <span
-            class="arrow"
-            :class="{ collapsed: ui.collapsed[entry.group.id] }"
+          <button
+            class="arrow-btn"
             :data-arrow="entry.group.id"
+            :aria-expanded="!ui.collapsed[entry.group.id]"
+            :aria-label="ui.collapsed[entry.group.id] ? '展开分组' : '收起分组'"
+            :title="ui.collapsed[entry.group.id] ? '展开分组' : '收起分组'"
             @click.stop="toggleGroup(entry.group.id)"
-            >▾</span
           >
-          <span class="name">{{ entry.group.name }}</span>
-          <span class="num">{{ groupCount(entry.group.id) }}</span>
-          <span class="act" :data-group-edit="entry.group.id" title="重命名分组" @click.stop="requestEditGroup(entry.group.id, entry.group.name)">
+            <span class="arrow" :class="{ collapsed: ui.collapsed[entry.group.id] }">▾</span>
+          </button>
+          <button class="row-main" @click="setView(`group:${entry.group.id}` as ViewKey)">
+            <span class="name">{{ entry.group.name }}</span>
+            <span class="num">{{ groupCount(entry.group.id) }}</span>
+          </button>
+          <button
+            class="act"
+            :data-group-edit="entry.group.id"
+            title="重命名分组"
+            aria-label="重命名分组"
+            @click.stop="requestEditGroup(entry.group.id, entry.group.name)"
+          >
             <Icon name="edit" :size="12" />
-          </span>
-          <span class="act danger" :data-group-del="entry.group.id" title="删除分组" @click.stop="askRemoveGroup(entry.group)">
+          </button>
+          <button
+            class="act danger"
+            :data-group-del="entry.group.id"
+            title="删除分组"
+            aria-label="删除分组"
+            @click.stop="askRemoveGroup(entry.group)"
+          >
             <Icon name="trash" :size="12" />
-          </span>
-        </button>
+          </button>
+        </div>
 
-        <button
+        <div
           v-for="l in entry.lists"
           v-show="!ui.collapsed[entry.group.id]"
           :key="l.id"
@@ -275,47 +291,69 @@ function markClass(kind: 'group' | 'list', id: string): string {
           ]"
           :data-list="l.id"
           draggable="true"
-          @click="setView(`list:${l.id}` as ViewKey)"
           @dragstart="onDragStart('list', l.id, $event)"
           @dragover.prevent="onDragOver('list', l.id, $event)"
           @drop.prevent="onDrop"
           @dragend="onDragEnd"
         >
-          <span class="dot" :style="{ background: l.color }" />
-          <span class="name">{{ l.name }}</span>
-          <span class="num">{{ countOf(`list:${l.id}` as ViewKey) }}</span>
-          <span class="act" :data-list-edit="l.id" title="编辑清单" @click.stop="requestEditList(l.id, l.name, l.gid, l.color)">
+          <button class="row-main" @click="setView(`list:${l.id}` as ViewKey)">
+            <span class="dot" :style="{ background: l.color }" />
+            <span class="name">{{ l.name }}</span>
+            <span class="num">{{ countOf(`list:${l.id}` as ViewKey) }}</span>
+          </button>
+          <button
+            class="act"
+            :data-list-edit="l.id"
+            title="编辑清单"
+            aria-label="编辑清单"
+            @click.stop="requestEditList(l.id, l.name, l.gid, l.color)"
+          >
             <Icon name="edit" :size="12" />
-          </span>
-          <span class="act danger" :data-list-del="l.id" title="删除清单" @click.stop="askRemoveList(l)">
+          </button>
+          <button
+            class="act danger"
+            :data-list-del="l.id"
+            title="删除清单"
+            aria-label="删除清单"
+            @click.stop="askRemoveList(l)"
+          >
             <Icon name="trash" :size="12" />
-          </span>
-        </button>
+          </button>
+        </div>
       </template>
     </div>
 
     <div class="rail status-rail">
-      <button
-        v-for="v in statusViews"
-        :key="v"
-        class="row view-row"
-        :class="{ active: isActive(v) }"
-        :data-view="v"
-        @click="setView(v)"
-      >
-        <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
-        <span class="name">{{ VIEW_NAME[v] }}</span>
-        <span class="num">{{ countOf(v) }}</span>
-        <span
-          v-if="v === 'trash' && countOf('trash') > 0"
-          class="act danger"
-          data-testid="empty-trash"
-          title="清空回收站"
-          @click.stop="onEmptyTrash"
+      <template v-for="v in statusViews" :key="v">
+        <button
+          v-if="v !== 'trash'"
+          class="row view-row"
+          :class="{ active: isActive(v) }"
+          :data-view="v"
+          @click="setView(v)"
         >
-          <Icon name="trash" :size="12" />
-        </span>
-      </button>
+          <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
+          <span class="name">{{ VIEW_NAME[v] }}</span>
+          <span class="num">{{ countOf(v) }}</span>
+        </button>
+        <div v-else class="row view-row" :class="{ active: isActive(v) }">
+          <button class="row-main" :data-view="v" @click="setView(v)">
+            <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
+            <span class="name">{{ VIEW_NAME[v] }}</span>
+            <span class="num">{{ countOf(v) }}</span>
+          </button>
+          <button
+            v-if="countOf('trash') > 0"
+            class="act danger"
+            data-testid="empty-trash"
+            title="清空回收站"
+            aria-label="清空回收站"
+            @click.stop="onEmptyTrash"
+          >
+            <Icon name="trash" :size="12" />
+          </button>
+        </div>
+      </template>
     </div>
   </aside>
 </template>
@@ -330,7 +368,7 @@ function markClass(kind: 'group' | 'list', id: string): string {
 }
 
 .rail {
-  padding: 8px 6px;
+  padding: 10px 8px;
   overflow-y: auto;
   min-height: 0;
 }
@@ -338,25 +376,26 @@ function markClass(kind: 'group' | 'list', id: string): string {
 .status-rail {
   margin-top: auto;
   border-top: 1px solid var(--line);
-  padding-top: 8px;
+  padding-top: 10px;
 }
 
 .spacer {
-  height: 10px;
+  height: 14px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px 6px;
+  padding: 12px 10px 6px;
   color: var(--text-mute);
   font-size: 12px;
 }
 
 .section-title .add {
-  padding: 1px 6px;
-  border-radius: 4px;
+  min-height: 24px;
+  padding: 0 8px;
+  border-radius: var(--radius-control);
   font-size: 11px;
   color: var(--text-mute);
   border: 1px solid transparent;
@@ -368,15 +407,16 @@ function markClass(kind: 'group' | 'list', id: string): string {
   background: var(--hover);
 }
 
+/* 行容器不接收点击(点击交给里面的主按钮),但它承载拖拽与落点指示 */
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   width: 100%;
-  padding: 6px 10px;
-  border-radius: 6px;
+  min-height: 40px;
+  padding: 0 6px 0 8px;
+  border-radius: 12px;
   color: var(--text);
-  text-align: left;
 }
 
 .row:hover {
@@ -384,32 +424,68 @@ function markClass(kind: 'group' | 'list', id: string): string {
 }
 
 .row.active {
-  background: var(--sel);
+  background: var(--accent-soft);
+  color: var(--text);
   font-weight: 600;
 }
 
-/* 行内操作:默认透明占位,悬停才显形。用 opacity 而非 display:none,
-   否则行宽会随悬停跳动 */
+/* 主按钮:名称 + 计数都归它,整行看上去还是一行 */
+.row-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 12px;
+  color: inherit;
+  text-align: left;
+  font: inherit;
+}
+
+/* 行内操作:默认透明占位,悬停或键盘聚焦时显形。用 opacity 而非 display:none,
+   否则行宽会随悬停跳动。按钮彼此是兄弟节点,不嵌套、不重叠。 */
 .act {
   display: inline-flex;
   align-items: center;
-  flex: 0 0 auto;
-  padding: 0 2px;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
   color: var(--text-mute);
-  cursor: pointer;
   opacity: 0;
 }
 
-.row:hover .act {
+.row:hover .act,
+.row:focus-within .act {
   opacity: 1;
 }
 
 .act:hover {
+  background: var(--card);
   color: var(--accent);
 }
 
 .act.danger:hover {
   color: var(--danger);
+}
+
+.arrow-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--text-dim);
+}
+
+.arrow-btn:hover {
+  background: var(--card);
+  color: var(--text);
 }
 
 /* 拖拽落点指示线 */
@@ -440,8 +516,17 @@ function markClass(kind: 'group' | 'list', id: string): string {
   white-space: nowrap;
 }
 
+/* 计数小胶囊 */
 .num {
-  color: var(--text-mute);
+  flex: 0 0 auto;
+  min-width: 22px;
+  padding: 1px 6px;
+  border-radius: 9px;
+  background: var(--card);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
@@ -458,10 +543,10 @@ function markClass(kind: 'group' | 'list', id: string): string {
 
 .arrow {
   width: 12px;
+  font-size: 12px;
+  line-height: 1;
   color: var(--text-dim);
-  flex: 0 0 12px;
-  cursor: pointer;
-  transition: transform 0.12s;
+  transition: transform 120ms ease;
 }
 
 .arrow.collapsed {
@@ -471,4 +556,5 @@ function markClass(kind: 'group' | 'list', id: string): string {
 .group-row {
   font-weight: 600;
 }
+
 </style>

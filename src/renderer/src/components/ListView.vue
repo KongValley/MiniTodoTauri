@@ -1,20 +1,21 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { addDays, dayOfMs, label, overdueDays, stampLabel, today } from '@shared/dates'
-import { sortedByIndex, type ListSort, type ListSortKey } from '@shared/query'
-import { DROPPED, INBOX_NAME, PRIO_COLOR, PRIO_NAME, STATUS_NAME, type TodoItem } from '@shared/types'
+import { filterActive, sortedByIndex, type ListSort, type ListSortKey } from '@shared/query'
+import { DROPPED, INBOX_NAME, PRIO_NAME, REPEAT_NAME, STATUS_NAME, type TodoItem } from '@shared/types'
 import { completeTodo, removeTodos, staleDoneIds } from '@shared/store-ops'
 import { importFromDialog, mutate, state, undoLast } from '../store/data'
 import { clockTick, index } from '../store/index'
-import { askConfirm, openCardMenu, requestEdit, requestNew, toast, ui } from '../store/ui'
+import { askConfirm, clearTaskConditions, hasTaskConditions, openCardMenu, requestEdit, requestNew, toast, ui } from '../store/ui'
 import { clearSelection, getAnchor, selectedIds, selectRange, setAnchor, setRowScroll, setRowSource, setSelection, toggleSelection } from '../lib/selection'
 import { segments } from '../lib/search'
+import { newTaskPreset } from '../lib/keymap'
 import { useVirtual } from '../lib/virtual'
 import BulkMenu from './BulkMenu.vue'
 import Icon from './Icon.vue'
 
-/** 行高固定 32px(见样式 .row),虚拟滚动据此窗口化;分段头同高 */
-const ROW_H = 32
+/** 行高固定 40px(见样式 .row,经 --list-row-height 下发),虚拟滚动据此窗口化;分段头同高 */
+const ROW_H = 40
 
 /** 优先级 → 旗标图标名 */
 const prioIcon = (p: number): string => (p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow')
@@ -36,7 +37,7 @@ const doneLast7 = computed(() => {
 })
 
 const rows = computed<Row[]>(() => {
-  const items = sortedByIndex(index.value, ui.view, ui.listSort)
+  const items = sortedByIndex(index.value, ui.view, ui.listSort, ui.taskFilter)
   // 「已完成」按完成日期分段(日期降序,最近完成的在最前);doneAt 缺失的旧数据自成一段放最后
   if (ui.view === 'done') {
     const byDay = new Map<string, TodoItem[]>()
@@ -90,6 +91,15 @@ const rows = computed<Row[]>(() => {
 /** 只含任务的子序列:计数 / 全选 / Shift 连选都基于它,避开分段头 */
 const itemRows = computed(() => rows.value.filter((r): r is { kind: 'item'; item: TodoItem } => r.kind === 'item'))
 
+/** 空结果分两种:真没数据(给新建/导入)与「当前条件筛空了」(给清除条件) */
+const emptyText = computed(() => {
+  const search = ui.search.trim()
+  if (search !== '' && filterActive(ui.taskFilter)) return `没有匹配「${search}」的任务，当前筛选下也没有`
+  if (search !== '') return `没有匹配「${search}」的任务`
+  if (filterActive(ui.taskFilter)) return '当前筛选下没有任务'
+  return '此视图暂无任务'
+})
+
 const keyOf = (r: Row): string => (r.kind === 'item' ? r.item.id : `head:${r.label}`)
 
 const scroller = ref<HTMLElement | null>(null)
@@ -114,14 +124,39 @@ function cycleSort(key: ListSortKey): void {
 }
 
 watch(
-  () => [ui.view, ui.search],
+  () => [ui.view, ui.search, ui.taskFilter.prio, ui.taskFilter.repeat],
   () => {
     clearSelection()
     setAnchor(null)
+    bulkOpen.value = false
     scrollTop.value = 0
     const host = scroller.value
     if (host) host.scrollTop = 0
   }
+)
+
+/**
+ * 行集合变化(改条件 / 改数据 / 完成后移出视图)时把选区收窄到还在的行上。
+ * flush:'sync' 是刻意的:批量删除读的就是 selectedIds,晚一拍就会有「看不见的行也被删掉」。
+ * 选中项被移除时锚点与批量菜单一起收掉,免得 Shift 连选挂在一个不存在的行上。
+ */
+watch(
+  () => itemRows.value.map((r) => r.item.id),
+  (ids) => {
+    const alive = new Set(ids)
+    let dropped = false
+    for (const id of [...selectedIds]) {
+      if (!alive.has(id)) {
+        selectedIds.delete(id)
+        dropped = true
+      }
+    }
+    if (dropped) {
+      setAnchor(null)
+      bulkOpen.value = false
+    }
+  },
+  { flush: 'sync' }
 )
 
 onMounted(() => {
@@ -148,6 +183,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   ro?.disconnect()
+  clearSelection()
+  setAnchor(null)
   setRowSource(() => [])
   setRowScroll(() => {})
 })
@@ -190,11 +227,8 @@ function onRowCheck(event: MouseEvent, item: TodoItem): void {
 function onRowCtx(event: MouseEvent, item: TodoItem): void {
   event.stopPropagation()
   event.preventDefault()
-  openCardMenu(
-    item.id,
-    Math.min(event.clientX, window.innerWidth - 184),
-    Math.min(event.clientY, window.innerHeight - 312)
-  )
+  // 与卡片同一入口:位置由菜单按实测尺寸钳制
+  openCardMenu(item.id, event.clientX, event.clientY)
 }
 
 function onComplete(event: MouseEvent, item: TodoItem): void {
@@ -259,20 +293,37 @@ function onClearDropped(): void {
 </script>
 
 <template>
-  <div class="list" data-testid="list" @click.self="clearSelection">
+  <div
+    class="list"
+    data-testid="list"
+    :style="{ '--list-row-height': `${ROW_H}px` }"
+    @click.self="clearSelection"
+  >
     <div class="toolbar">
       <span class="count" data-testid="list-count">
         {{ ui.view === 'done' ? `共 ${itemRows.length} 条 · 近 7 天完成 ${doneLast7} 条` : `共 ${itemRows.length} 条` }}
       </span>
       <span v-if="selectedIds.size > 0" class="sel">已选 {{ selectedIds.size }} 条</span>
       <span class="spacer" />
-      <select v-if="ui.view === 'done'" v-model="cleanDays" data-testid="clean-done" @change="onCleanDone">
+      <select
+        v-if="ui.view === 'done'"
+        v-model="cleanDays"
+        data-testid="clean-done"
+        title="作用于此视图全部已完成任务，不受筛选限制"
+        @change="onCleanDone"
+      >
         <option value="">清理早于…</option>
         <option value="7">7 天</option>
         <option value="30">30 天</option>
         <option value="90">90 天</option>
       </select>
-      <button v-if="ui.view === 'dropped'" class="btn" data-testid="clear-dropped" @click="onClearDropped">
+      <button
+        v-if="ui.view === 'dropped'"
+        class="btn"
+        data-testid="clear-dropped"
+        title="作用于此视图全部已放弃任务，不受筛选限制"
+        @click="onClearDropped"
+      >
         清空已放弃
       </button>
       <button class="btn" data-testid="bulk-menu" :disabled="selectedIds.size === 0" @click.stop="bulkOpen = !bulkOpen">
@@ -301,11 +352,16 @@ function onClearDropped(): void {
 
     <div ref="scroller" class="rows thin-scroll" @scroll="onScroll">
       <div v-if="itemRows.length === 0" class="empty">
-        <p>{{ ui.search ? `没有匹配「${ui.search}」的任务` : '此视图暂无任务' }}</p>
+        <p>{{ emptyText }}</p>
         <div class="empty-actions">
-          <button class="btn" data-testid="list-empty-new" @click="requestNew()">新建任务</button>
-          <button class="btn" data-testid="list-empty-import" @click="void importFromDialog()">导入旧版数据</button>
-          <button class="btn" data-testid="list-empty-help" @click="ui.helpOpen = true">查看快捷键</button>
+          <template v-if="hasTaskConditions()">
+            <button class="btn" data-testid="clear-task-conditions" @click="clearTaskConditions()">清除搜索和筛选</button>
+          </template>
+          <template v-else>
+            <button class="btn" data-testid="list-empty-new" @click="requestNew(newTaskPreset())">新建任务</button>
+            <button class="btn" data-testid="list-empty-import" @click="void importFromDialog()">导入旧版数据</button>
+            <button class="btn" data-testid="list-empty-help" @click="ui.helpOpen = true">查看快捷键</button>
+          </template>
         </div>
       </div>
 
@@ -326,7 +382,12 @@ function onClearDropped(): void {
               <input type="checkbox" :checked="selectedIds.has(v.item.item.id)" @click.stop="onRowCheck($event, v.item.item)" />
             </span>
             <span class="cell title">
-              <button class="circle" :class="{ checked: v.item.item.status === 1 }" @click="onComplete($event, v.item.item)">
+              <button
+                class="circle"
+                :class="{ checked: v.item.item.status === 1 }"
+                :aria-label="v.item.item.status === 1 ? '标记为未完成' : '标记为完成'"
+                @click="onComplete($event, v.item.item)"
+              >
                 <Icon v-if="v.item.item.status === 1" name="check" :size="10" />
               </button>
               <span class="ttext">
@@ -334,6 +395,9 @@ function onClearDropped(): void {
               </span>
               <span v-if="v.item.item.subtasks.length > 0" class="subs">
                 {{ v.item.item.subtasks.filter((s) => s.done).length }}/{{ v.item.item.subtasks.length }}
+              </span>
+              <span v-if="v.item.item.repeat.kind !== 'none'" class="repeat" data-repeat>
+                {{ REPEAT_NAME[v.item.item.repeat.kind] }}
               </span>
             </span>
             <span class="cell date">
@@ -343,8 +407,8 @@ function onClearDropped(): void {
               </template>
             </span>
             <span class="cell lname"><i class="dot" :style="{ background: colorOf(v.item.item) }" />{{ nameOf(v.item.item) }}</span>
-            <span class="cell prio">
-              <i class="pi" :style="{ color: PRIO_COLOR[v.item.item.prio] }"><Icon :name="prioIcon(v.item.item.prio)" :size="12" /></i>{{ PRIO_NAME[v.item.item.prio] }}
+            <span class="cell prio" :class="`p${v.item.item.prio}`">
+              <i class="pi"><Icon :name="prioIcon(v.item.item.prio)" :size="12" /></i>{{ PRIO_NAME[v.item.item.prio] }}
             </span>
             <span class="cell note">{{ v.item.item.status !== 0 ? STATUS_NAME[v.item.item.status] : v.item.item.note }}</span>
           </div>
@@ -361,14 +425,18 @@ function onClearDropped(): void {
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  /* 列宽随窗口收放:窄窗口(最小 900px)下线 table 收掉「备注」列 */
+  --list-cols: 32px minmax(0, 2fr) 132px 104px 76px minmax(0, 1fr);
 }
 
 .toolbar {
   position: relative; /* 批量菜单以它为定位参照(absolute) */
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
-  padding: 8px 14px;
+  min-height: 44px;
+  padding: 6px 16px;
   border-bottom: 1px solid var(--line);
   color: var(--text-dim);
   font-size: 12px;
@@ -406,14 +474,14 @@ function onClearDropped(): void {
 .head,
 .row {
   display: grid;
-  grid-template-columns: 34px minmax(220px, 2fr) 120px 120px 70px minmax(120px, 1fr);
+  grid-template-columns: var(--list-cols);
   align-items: center;
   gap: 8px;
-  padding: 0 14px;
+  padding: 0 16px;
 }
 
 .head {
-  height: 30px;
+  height: 36px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   color: var(--text-dim);
@@ -463,8 +531,8 @@ function onClearDropped(): void {
 .sec {
   display: flex;
   align-items: center;
-  height: 32px;
-  padding: 6px 14px;
+  height: var(--list-row-height);
+  padding: 6px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   color: var(--text-dim);
@@ -480,7 +548,7 @@ function onClearDropped(): void {
 }
 
 .row {
-  height: 32px;
+  height: var(--list-row-height);
   border-bottom: 1px solid var(--line);
   cursor: default;
 }
@@ -490,7 +558,7 @@ function onClearDropped(): void {
 }
 
 .row.selected {
-  background: var(--sel);
+  background: var(--accent-soft);
 }
 
 .cell {
@@ -517,23 +585,40 @@ function onClearDropped(): void {
   text-overflow: ellipsis;
 }
 
+/* 完成按钮:24px 点击区,视觉仍是 16px 的圆 */
 .circle {
-  flex: 0 0 16px;
-  width: 16px;
-  height: 16px;
+  position: relative;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  border: 1.5px solid var(--thumb-hot);
-  color: #fff;
-  font-size: 11px;
-  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.circle.checked {
+.circle::before {
+  content: '';
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1.5px solid var(--thumb-hot);
+}
+
+.circle:hover::before {
+  border-color: var(--accent);
+}
+
+.circle.checked::before {
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.circle :deep(svg) {
+  position: absolute;
+  color: var(--on-accent);
 }
 
 .prio {
@@ -547,10 +632,43 @@ function onClearDropped(): void {
   flex: 0 0 12px;
 }
 
+.prio.p1 .pi {
+  color: var(--prio-1);
+}
+
+.prio.p2 .pi {
+  color: var(--prio-2);
+}
+
+.prio.p3 .pi {
+  color: var(--prio-3);
+}
+
+/* 窄窗口(最小 900px):收掉备注列,主列改成 1fr,行内不再横向挤压 */
+@media (max-width: 1100px) {
+  .list {
+    --list-cols: 32px minmax(0, 1fr) 132px 100px 68px;
+  }
+
+  .note {
+    display: none;
+  }
+}
+
 .subs {
   padding: 0 5px;
   border-radius: 8px;
   background: var(--sel);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+/* 重复任务标记:低饱和胶囊,只说明「这条会再来」,不与标题抢注意力 */
+.repeat {
+  flex: 0 0 auto;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
   color: var(--text-dim);
   font-size: 11px;
 }

@@ -27,6 +27,7 @@ import {
   duplicateTodo,
   emptyStore,
   mergeStore,
+  cardBucket,
   moveCard,
   moveGroup,
   moveList,
@@ -1051,4 +1052,26 @@ test('duplicateTodo 复制出独立的新任务:新 id、ACTIVE、子任务重�
   assert.notEqual(copy.subtasks[0]?.id, 's1', '子任务 id 也换新,不与原件共享')
   assert.equal(src.todos.length, 1, '不改原 store')
   assert.equal(duplicateTodo(src, 'nope'), src, '找不到就原样返回')
+})
+
+test('cardBucket 与 moveCard 同口径:同 status/日期/优先级,排除自身,按 order→seq 排', () => {
+  const t = today()
+  const drag = todo({ id: 'drag', date: '', prio: 2, seq: 9 })
+  const sameDate = todo({ id: 'same-date', date: t, prio: 2, seq: 2, order: 1 })
+  const laterOrder = todo({ id: 'later', date: t, prio: 2, seq: 1, order: 0 })
+  const otherPrio = todo({ id: 'other-prio', date: t, prio: 1, seq: 3 })
+  const doneSame = todo({ id: 'done-same', date: t, prio: 2, seq: 4, status: DONE })
+  const store: Store = { ...emptyStore(), todos: [drag, sameDate, laterOrder, otherPrio, doneSame] }
+
+  assert.deepEqual(
+    cardBucket(store, 'drag', t).map((x) => x.id),
+    ['later', 'same-date'],
+    '只收同日期同优先级同状态的目标桶成员(不含自身),order 小的在前'
+  )
+  // 非法日期按未排期处理(与 moveCard 一致)
+  const loose = todo({ id: 'loose', date: '', prio: 2, seq: 5 })
+  const withLoose: Store = { ...store, todos: [...store.todos, loose] }
+  assert.deepEqual(cardBucket(withLoose, 'drag', '2026-2-3').map((x) => x.id), ['loose'])
+  // 找不到拖动项:空桶(moveCard 对未知 id 原样返回,落点映射也不用开工)
+  assert.deepEqual(cardBucket(store, 'nope', t), [])
 })

@@ -1,16 +1,79 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { addDays, today } from '@shared/dates'
 import { completeTodo, duplicateTodo, moveCard, removeTodos, setStatus, updateTodo } from '@shared/store-ops'
-import { ACTIVE, INBOX_NAME, PRIO_COLOR, PRIO_NAME, type Prio } from '@shared/types'
+import { ACTIVE, INBOX_NAME, PRIO_NAME, type Prio } from '@shared/types'
 import { mutate, undoLast, state } from '../store/data'
 import { askConfirm, closeCardMenu, requestEdit, toast, ui } from '../store/ui'
+import { isComposingEvent } from '../lib/input-events'
 import Icon from './Icon.vue'
 
 const m = computed(() => ui.cardMenu as { id: string; x: number; y: number })
 const item = computed(() => state.store.todos.find((t) => t.id === m.value.id))
 /** 「移动到」选择框的值(打开菜单时为空 = 保持原清单) */
 const cardList = ref('')
+
+const menuEl = ref<HTMLElement | null>(null)
+/** 打开浮层前谁拿着焦点:Esc 收起时还给它 */
+let trigger: HTMLElement | null = null
+/** 视口安全边距(px):贴边时不至于被裁掉 */
+const SAFE = 8
+const pos = ref({ left: 0, top: 0 })
+
+/** 动作收尾:收起菜单并把焦点还给触发控件(打开弹窗的动作不适用——焦点归弹窗) */
+function closeAndRestore(): void {
+  const back = trigger
+  closeCardMenu()
+  void nextTick(() => {
+    // 触发控件可能已被移除(动作把它带出了当前视图)或变成了禁用态(无意义) —— 那就别抢焦点
+    if (back && back.isConnected && back !== document.body && !(back as HTMLButtonElement).disabled) back.focus()
+  })
+}
+
+/** 用实测尺寸钳制位置,不再猜菜单宽高(猜错就会在右下角被裁) */
+async function place(): Promise<void> {
+  await nextTick()
+  const el = menuEl.value
+  if (!el) return
+  const maxLeft = Math.max(SAFE, window.innerWidth - el.offsetWidth - SAFE)
+  const maxTop = Math.max(SAFE, window.innerHeight - el.offsetHeight - SAFE)
+  pos.value = {
+    left: Math.min(Math.max(SAFE, m.value.x), maxLeft),
+    top: Math.min(Math.max(SAFE, m.value.y), maxTop)
+  }
+}
+
+onMounted(() => {
+  trigger = document.activeElement as HTMLElement | null
+  window.addEventListener('keydown', onWindowKeyDown)
+  void place().then(() => {
+    // 打开即聚焦第一个可用操作:Tab/回车马上可用,不用先点一下
+    menuEl.value?.querySelector<HTMLElement>('button:not([disabled]), select:not([disabled])')?.focus()
+  })
+})
+
+onBeforeUnmount(() => window.removeEventListener('keydown', onWindowKeyDown))
+
+watch(() => [m.value.x, m.value.y, m.value.id], () => void place())
+
+/**
+ * Esc 收起并把焦点还给触发控件。
+ * 挂在 window 上而不是面板自身:焦点在不在面板里都要能收,
+ * 且必须自己吞掉这次事件(全局 keydown 先于本处注册,已在 keymap 里让位)。
+ */
+function onWindowKeyDown(e: KeyboardEvent): void {
+  if (e.key !== 'Escape' || isComposingEvent(e)) return
+  e.preventDefault()
+  e.stopPropagation()
+  closeAndRestore()
+}
+
+/** 焦点已经离开浮层(点了别处 / Tab 走了):收起,但不把焦点拉回来 */
+function onFocusOut(e: FocusEvent): void {
+  const next = e.relatedTarget as Node | null
+  if (next && menuEl.value?.contains(next)) return
+  closeCardMenu()
+}
 
 const px = (v: number): string => `${v}px`
 
@@ -27,20 +90,20 @@ const TAIL = Number.MAX_SAFE_INTEGER
 function reschedule(date: string, label: string): void {
   const id = m.value.id
   void mutate((s) => moveCard(s, id, date, TAIL)).then(() => toast(`已改期：${label}`))
-  closeCardMenu()
+  closeAndRestore()
 }
 
 function setPrio(prio: Prio): void {
   const id = m.value.id
   void mutate((s) => updateTodo(s, id, { prio })).then(() => toast(`优先级：${PRIO_NAME[prio]}`))
-  closeCardMenu()
+  closeAndRestore()
 }
 
 function complete(): void {
   const id = m.value.id
   const done = item.value?.status === 1
   void mutate((s) => (done ? setStatus(s, id, ACTIVE) : completeTodo(s, id)))
-  closeCardMenu()
+  closeAndRestore()
 }
 
 function remove(): void {
@@ -67,7 +130,7 @@ function edit(): void {
 function duplicate(): void {
   const id = m.value.id
   void mutate((s) => duplicateTodo(s, id)).then(() => toast('已复制为一条新任务'))
-  closeCardMenu()
+  closeAndRestore()
 }
 
 /** 「移动到」清单(收集箱 = ''),与批量菜单同一个 updateTodo(lid) 路径 */
@@ -76,7 +139,7 @@ function moveToList(): void {
   const lid = cardList.value
   const name = state.store.lists.find((l) => l.id === lid)?.name ?? INBOX_NAME
   void mutate((s) => updateTodo(s, id, { lid })).then(() => toast(`已移动到「${name}」`))
-  closeCardMenu()
+  closeAndRestore()
 }
 
 const lists = computed(() => state.store.lists)
@@ -110,34 +173,50 @@ watch(item, (v) => {
       @click="closeCardMenu"
       @contextmenu.prevent="closeCardMenu"
     >
-      <div class="menu" data-testid="card-menu" :style="{ left: px(m.x), top: px(m.y) }" role="menu" @click.stop>
+      <div
+        ref="menuEl"
+        class="menu"
+        data-testid="card-menu"
+        :style="{ left: px(pos.left), top: px(pos.top) }"
+        role="group"
+        aria-label="任务操作"
+        @click.stop
+        @focusout="onFocusOut"
+      >
         <button
           v-for="(a, i) in actions"
           :key="i"
           class="mi"
           :class="{ danger: a.danger }"
           :data-menu="a.label"
-          role="menuitem"
           @click="a.run"
         >
           <Icon :name="a.icon" :size="14" class="mi-ico" />
           <span>{{ a.label }}</span>
         </button>
-        <div class="mi-row">
+        <div class="mi-row" role="group" aria-label="设置优先级">
           <button
             v-for="p in [1, 2, 3] as const"
             :key="p"
             class="mi mini"
+            :class="`p${p}`"
             :data-menu="PRIO_NAME[p]"
-            role="menuitem"
+            :title="`设为${PRIO_NAME[p]}优先级`"
+            :aria-label="`设为${PRIO_NAME[p]}优先级`"
             @click="setPrio(p)"
           >
-            <Icon :name="p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow'" :size="13" :style="{ color: PRIO_COLOR[p] }" />
+            <Icon :name="p === 1 ? 'flagHigh' : p === 2 ? 'flagMid' : 'flagLow'" :size="13" />
+            <span>{{ PRIO_NAME[p] }}</span>
           </button>
         </div>
         <div class="row-select">
-          <span class="lbl">移动到</span>
-          <select v-model="cardList" data-testid="card-menu-list" @change="moveToList">
+          <span id="card-menu-list-label" class="lbl">移动到</span>
+          <select
+            v-model="cardList"
+            data-testid="card-menu-list"
+            aria-labelledby="card-menu-list-label"
+            @change="moveToList"
+          >
             <option value="">{{ INBOX_NAME }}</option>
             <option v-for="l in lists" :key="l.id" :value="l.id">{{ l.name }}</option>
           </select>
@@ -156,12 +235,14 @@ watch(item, (v) => {
 
 .menu {
   position: fixed;
-  min-width: 172px;
-  padding: 4px;
+  min-width: 180px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 6px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-popover);
 }
 
 .mi {
@@ -169,9 +250,10 @@ watch(item, (v) => {
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 10px;
+  min-height: 32px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: none;
   color: var(--text);
   font-size: 13px;
@@ -194,6 +276,19 @@ watch(item, (v) => {
 
 .mi.danger .mi-ico {
   color: var(--danger);
+}
+
+/* 优先级快捷钮:图标颜色走 token,三档与卡片/列表一致 */
+.mini.p1 :deep(svg) {
+  color: var(--prio-1);
+}
+
+.mini.p2 :deep(svg) {
+  color: var(--prio-2);
+}
+
+.mini.p3 :deep(svg) {
+  color: var(--prio-3);
 }
 
 .mi-row {
@@ -222,10 +317,11 @@ watch(item, (v) => {
 }
 
 .mini {
-  flex: 1;
-  padding: 4px 0;
+  flex: 1 1 0;
+  gap: 4px;
+  justify-content: center;
+  border: 1px solid var(--line);
   font-size: 12px;
   color: var(--text-dim);
-  justify-content: center;
 }
 </style>

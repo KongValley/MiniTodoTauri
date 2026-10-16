@@ -76,25 +76,26 @@ truthy(row.querySelector('.circle svg'), '列表已完成行圆圈内是 SVG 勾
 // 页面上不应再有旧字形图标
 eq(document.body.textContent.includes('⌕'), false, '不再有 ⌕ 字形')
 
-// 商务 token 真在读
+// 商务 token 真在读(柔和卡片版:成套固定值,浅/深各一份)
 const root = document.documentElement
 const cssVar = (k) => getComputedStyle(root).getPropertyValue(k).trim().toLowerCase()
-eq(cssVar('--accent'), '#2563eb', '浅色 accent 已是 Fluent 品蓝')
-eq(cssVar('--bg'), '#fbfcfd', '浅色背景已是近白')
-eq(cssVar('--line'), '#d5dae1', '浅色分隔线已加深')
+eq(cssVar('--accent'), '#4864c0', '浅色 accent 已是柔和品蓝')
+eq(cssVar('--bg'), '#f5f6fa', '浅色背景已是浅灰蓝')
+eq(cssVar('--line'), '#dde3ec', '浅色分隔线已弱化')
+eq(cssVar('--radius-card'), '14px', '卡片圆角 token 已定义')
 truthy(cssVar('--ico-blue').length > 0 && cssVar('--ico-blue-2').length > 0, '图标双色 token 已定义')
 
 // 深色下 token 同步切换
 await t.setTheme('dark')
 await sleep(250)
-eq(cssVar('--accent'), '#4b83f0', '深色 accent 已提亮')
-eq(cssVar('--bg'), '#101418', '深色背景已是藏青黑')
+eq(cssVar('--accent'), '#9fb4ff', '深色 accent 已提亮')
+eq(cssVar('--bg'), '#171b24', '深色背景已是藏青黑')
 eq(cssVar('--ico-blue'), '#6d9df5', '深色图标主色已提亮')
 eq(root.dataset.theme, 'dark', 'data-theme 已切到 dark')
 
 await t.setTheme('light')
 await sleep(200)
-eq(cssVar('--accent'), '#2563eb', '切回浅色后 accent 复原')
+eq(cssVar('--accent'), '#4864c0', '切回浅色后 accent 复原')
 eq(root.dataset.theme, 'light', 'data-theme 已切回 light')
 
 // 列表视图:排序箭头 + 优先级旗标同样是 svg

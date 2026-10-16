@@ -32,12 +32,13 @@ window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bub
 await sleep(150)
 eq(t.selection().length, 3, '重复 Ctrl+A 仍是全选')
 
-// 切到看板:ListView 卸载只清行源,选择保留(看板下 Ctrl+A 无效但不改变选择)
+// 切到看板:ListView 卸载即清选区 —— 看不见的行不进选区,批量动作才不会误伤
 t.setBoard(true)
 await sleep(150)
+eq(t.selection().length, 0, '切到看板时选区被清掉(列表行已不可见)')
 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }))
 await sleep(150)
-eq(t.selection().length, 3, '看板下 Ctrl+A 不改变选择')
+eq(t.selection().length, 0, '看板下 Ctrl+A 无效(没有行源)')
 
 // 切回列表:原有的 onMounted 清空选择(LIST 视图挂载即重置选择)
 t.setBoard(false)

@@ -341,6 +341,24 @@ export function staleDoneIds(store: Store, days: number, nowMs: number): string[
 }
 
 /**
+ * 目标桶:与 moveCard 写回时用的桶完全同源 —— 同 status、同日期(非法日期一律按未排期)、
+ * 同优先级,排除被拖动项自身;桶序 = order 升序、平手 seq。
+ * 导出给看板用:拖拽落点要映射成「完整桶下标」,两边必须是同一份规则
+ * (判据各写一遍的话,moveCard 一改就会静默落错位置)。
+ */
+export function cardBucket(store: Store, id: string, date: string): TodoItem[] {
+  const target = store.todos.find((t) => t.id === id)
+  if (!target) return []
+  const nextDate = isDate(date) ? date : ''
+  const bucket: TodoItem[] = []
+  for (const t of store.todos) {
+    if (t.id !== id && t.status === target.status && t.date === nextDate && t.prio === target.prio) bucket.push(t)
+  }
+  bucket.sort((a, b) => (a.order !== b.order ? a.order - b.order : a.seq - b.seq))
+  return bucket
+}
+
+/**
  * 看板拖拽改期/重排的唯一入口。设 date 后,对该 (date, prio) 桶
  * 按「移除原项 → 在 index 处插入 → 重排 order = 1..n」写回。index 越界钳到 [0, n]。
  */
@@ -349,13 +367,7 @@ export function moveCard(store: Store, id: string, date: string, index: number):
   if (!target) return store
   const nextDate = isDate(date) ? date : ''
 
-  // 桶成员:同日期同优先级(不含被拖动项自身)。单次遍历收集,避免 filter+sort 各扫一遍。
-  const bucket: TodoItem[] = []
-  for (const t of store.todos) {
-    if (t.id !== id && t.status === target.status && t.date === nextDate && t.prio === target.prio) bucket.push(t)
-  }
-  bucket.sort((a, b) => (a.order !== b.order ? a.order - b.order : a.seq - b.seq))
-
+  const bucket = cardBucket(store, id, date)
   const at = Math.max(0, Math.min(index, bucket.length))
   const ordered = bucket.map((t) => t.id)
   ordered.splice(at, 0, id)

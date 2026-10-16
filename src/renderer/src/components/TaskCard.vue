@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 
 import { completeTodo, toggleSubtask } from '@shared/store-ops'
 import { overdueDays } from '@shared/dates'
-import { PRIO_COLOR, PRIO_NAME, type TodoItem } from '@shared/types'
+import { PRIO_NAME, REPEAT_NAME, type TodoItem } from '@shared/types'
 import { mutate } from '../store/data'
 import { openCardMenu, requestEdit, ui } from '../store/ui'
 import { segments } from '../lib/search'
@@ -19,7 +19,7 @@ const props = defineProps<{
 }>()
 
 const prioName = computed(() => PRIO_NAME[props.item.prio])
-const prioColor = computed(() => PRIO_COLOR[props.item.prio])
+const repeatName = computed(() => REPEAT_NAME[props.item.repeat.kind])
 const subDone = computed(() => props.item.subtasks.filter((s) => s.done).length)
 const isDone = computed(() => props.item.status === 1)
 const hl = computed(() => segments(props.item.title, ui.search))
@@ -43,12 +43,8 @@ function onOpen(): void {
 
 function onCtx(event: MouseEvent): void {
   event.stopPropagation()
-  // 钳制坐标,避免菜单在右/下边缘被裁掉(菜单约 176px 宽、最长约 300px 高)
-  openCardMenu(
-    props.item.id,
-    Math.min(event.clientX, window.innerWidth - 184),
-    Math.min(event.clientY, window.innerHeight - 312)
-  )
+  // 位置钳制交给菜单自己(它按实测尺寸钳):这里先猜宽高就会在右下角被裁
+  openCardMenu(props.item.id, event.clientX, event.clientY)
 }
 </script>
 
@@ -62,33 +58,42 @@ function onCtx(event: MouseEvent): void {
     @click="onOpen"
     @contextmenu.prevent="onCtx"
   >
-    <button class="circle" :class="{ checked: isDone }" :data-complete="item.id" @click="onComplete">
-      <Icon v-if="isDone" name="check" :size="12" />
+    <button
+      class="circle"
+      :class="{ checked: isDone }"
+      :data-complete="item.id"
+      :aria-label="isDone ? '标记为未完成' : '标记为完成'"
+      @click="onComplete"
+    >
+      <span class="ring"><Icon v-if="isDone" name="check" :size="12" /></span>
     </button>
 
     <button
       v-if="item.note || item.subtasks.length > 0"
       class="expand"
       :data-expand="item.id"
+      :aria-label="expanded ? '收起详情' : '展开详情'"
       :title="expanded ? '收起详情' : '展开详情'"
       @click.stop="expanded = !expanded"
     >
-      <Icon :name="expanded ? 'collapse' : 'expand'" :size="11" />
+      <Icon :name="expanded ? 'collapse' : 'expand'" :size="12" />
     </button>
 
     <div class="body">
       <div class="title">
-        <span v-for="(s, i) in hl" :key="i" :class="{ hl: s.hit }">{{ s.t }}</span>
+        <button class="title-btn" :aria-label="`编辑任务：${item.title}`" @click.stop="onOpen">
+          <span v-for="(s, i) in hl" :key="i" :class="{ hl: s.hit }">{{ s.t }}</span>
+        </button>
       </div>
       <div class="meta">
         <span class="date">{{ dateLabel }}</span>
         <span v-if="od > 0" class="overdue" data-overdue>逾期 {{ od }} 天</span>
-        <span class="sep">·</span>
         <span class="list"><i class="dot" :style="{ background: listColor }" />{{ listName }}</span>
         <span v-if="item.subtasks.length > 0" class="subs" data-subs>{{ subDone }}/{{ item.subtasks.length }}</span>
-        <span class="prio" :style="{ color: prioColor }">
+        <span class="prio" :class="`p${item.prio}`">
           <Icon :name="flagName" :size="12" />{{ prioName }}
         </span>
+        <span v-if="item.repeat.kind !== 'none'" class="repeat" data-repeat>{{ repeatName }}</span>
       </div>
       <div v-if="item.note && !expanded" class="note">{{ item.note }}</div>
 
@@ -114,19 +119,21 @@ function onCtx(event: MouseEvent): void {
 .card {
   display: flex;
   gap: 10px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 1px 2px var(--shadow);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
   cursor: pointer;
   /* 展开钮绝对定位的参照 */
   position: relative;
 }
 
+/* hover 只动边线/底色/阴影:不做位移或缩放,长列表里不抖 */
 .card:hover {
   border-color: var(--accent);
+  background: var(--hover);
 }
 
 .card.done .title {
@@ -138,15 +145,14 @@ function onCtx(event: MouseEvent): void {
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   background: none;
   color: var(--text-mute);
-  font-size: 11px;
-  line-height: 22px;
+  line-height: 28px;
   cursor: pointer;
 }
 
@@ -160,27 +166,38 @@ function onCtx(event: MouseEvent): void {
   border-radius: 2px;
 }
 
+/* 完成按钮:28×28 的点击区,视觉还是一个 18px 的圆 */
 .circle {
-  flex: 0 0 18px;
-  width: 18px;
-  height: 18px;
-  margin-top: 1px;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+  margin: -4px 0 0 -4px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
-  border: 1.5px solid var(--thumb-hot);
-  color: #fff;
-  font-size: 12px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.circle:hover {
+.ring {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--thumb-hot);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.circle:hover .ring {
   border-color: var(--accent);
 }
 
-.circle.checked {
+.circle.checked .ring {
   background: var(--accent);
   border-color: var(--accent);
+  color: var(--on-accent);
 }
 
 .body {
@@ -189,8 +206,8 @@ function onCtx(event: MouseEvent): void {
 }
 
 .title {
-  font-size: 13px;
-  line-height: 1.4;
+  font-size: 14px;
+  line-height: 1.5;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -198,14 +215,33 @@ function onCtx(event: MouseEvent): void {
   word-break: break-word;
 }
 
+/* 标题本身就是原生按钮:键盘能聚焦、回车即打开,外层卡片点击仍然可用 */
+.title-btn {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 6px;
+  gap: 10px;
+  margin-top: 8px;
   font-size: 12px;
   color: var(--text-dim);
   flex-wrap: wrap;
+}
+
+/* 日期与列头重复,压到最弱;真正要看的是清单/优先级/重复 */
+.date {
+  color: var(--text-mute);
 }
 
 .dot {
@@ -213,7 +249,7 @@ function onCtx(event: MouseEvent): void {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  margin-right: 4px;
+  margin-right: 5px;
 }
 
 .prio {
@@ -222,13 +258,29 @@ function onCtx(event: MouseEvent): void {
   gap: 3px;
 }
 
-.sep {
-  color: var(--text-mute);
+.prio.p1 {
+  color: var(--prio-1);
+}
+
+.prio.p2 {
+  color: var(--prio-2);
+}
+
+.prio.p3 {
+  color: var(--prio-3);
+}
+
+/* 重复任务标记:低饱和胶囊,与列表行同一视觉语言 */
+.repeat {
+  padding: 1px 7px;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
 }
 
 .subs {
-  padding: 0 5px;
-  border-radius: 8px;
+  padding: 1px 6px;
+  border-radius: 9px;
   background: var(--sel);
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
@@ -293,7 +345,7 @@ function onCtx(event: MouseEvent): void {
 .box.on {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .st {

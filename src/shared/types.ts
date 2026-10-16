@@ -81,7 +81,6 @@ export type BuiltinView = (typeof VIEWS)[number]
 export type ViewKey = BuiltinView | `list:${string}` | `group:${string}`
 
 export const PRIO_NAME = ['', '高', '中', '低'] as const
-export const PRIO_COLOR = ['', '#D34A3E', '#DD9E28', '#3C9954'] as const
 export const STATUS_NAME: Record<Status, string> = {
   0: '待办',
   1: '已完成',

@@ -12,7 +12,7 @@ function onAction(): void {
 </script>
 
 <template>
-  <div class="toast" data-testid="toast">
+  <div class="toast" data-testid="toast" role="status" aria-live="polite" aria-atomic="true">
     <span class="text">{{ text }}</span>
     <button v-if="action" class="act" data-testid="toast-action" @click="onAction">{{ action.label }}</button>
   </div>
@@ -27,12 +27,12 @@ function onAction(): void {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 16px;
-  border-radius: 8px;
+  padding: 10px 18px;
+  border-radius: var(--radius-card);
   background: var(--text);
   color: var(--bg);
   font-size: 12px;
-  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
   z-index: 200;
   max-width: 70vw;
 }

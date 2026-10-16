@@ -30,7 +30,7 @@ import { cleanupExpiredTrash, commit, flush, mutate, reload, state } from './sto
 import { applyTheme, effectiveTheme, setTheme, updateSettings, type Theme } from './store/settings'
 import { closeDialog, requestNew, ui } from './store/ui'
 import { clearSelection, selectedIds } from './lib/selection'
-import { setView, toggleBoard } from './lib/keymap'
+import { newTaskPreset, setView, toggleBoard } from './lib/keymap'
 
 export interface TodoTestAPI {
   getState: () => Store
@@ -95,6 +95,8 @@ export interface TodoTestAPI {
   openBackups: () => void
   /** 打开「导出为 Markdown / CSV」面板（等价于菜单同名入口） */
   openExport: () => void
+  /** 打开「设置」面板（等价于菜单/托盘同名入口） */
+  openSettings: () => void
 
   isDate: (s: string) => boolean
   label: (s: string) => string
@@ -181,15 +183,19 @@ export function installTestApi(): void {
     },
 
     boardColumns: () =>
-      columnsForView(index.value, ui.view).map((c) => ({
+      columnsForView(index.value, ui.view, ui.taskFilter).map((c) => ({
         date: c.date,
         prios: bucketsOf(c.items).map((b) => b.prio),
         ids: c.items.map((t) => t.id)
       })),
     listRows: () =>
-      sortedByIndex(index.value, ui.view).map((t) => ({ id: t.id, title: t.title, date: t.date })),
+      sortedByIndex(index.value, ui.view, ui.listSort, ui.taskFilter).map((t) => ({
+        id: t.id,
+        title: t.title,
+        date: t.date
+      })),
     buckets: (date) => {
-      const col = columnsForView(index.value, ui.view).find((c) => c.date === date)
+      const col = columnsForView(index.value, ui.view, ui.taskFilter).find((c) => c.date === date)
       if (!col) return []
       return bucketsOf(col.items).map((b) => ({ prio: b.prio, ids: b.items.map((t) => t.id) }))
     },
@@ -200,13 +206,16 @@ export function installTestApi(): void {
     },
     selection: () => [...selectedIds],
     dialog: () => ui.dialog,
-    openNew: () => requestNew(),
+    openNew: () => requestNew(newTaskPreset()),
     closeDialog,
     openBackups: () => {
       ui.backupOpen = true
     },
     openExport: () => {
       ui.exportOpen = true
+    },
+    openSettings: () => {
+      ui.settingsOpen = true
     },
 
     lastView: () => ui.view,

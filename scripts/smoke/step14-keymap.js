@@ -12,6 +12,12 @@ truthy(document.querySelector('[data-testid="task-dialog"]'), '弹窗 DOM 存在
 key('Escape')
 await new Promise((r) => setTimeout(r, 100))
 eq(t.dialog(), null, 'Esc 未关闭弹窗')
+// 弹窗是用键盘开的(body 拿着焦点,没有有效触发控件):焦点应落到「新建」按钮上
+eq(
+  document.activeElement,
+  document.querySelector('[data-testid="new-task"]'),
+  '没有触发控件时焦点落到「新建」'
+)
 
 const boardBefore = t.board()
 key('b')
@@ -31,6 +37,15 @@ key('f', { ctrlKey: true })
 await new Promise((r) => setTimeout(r, 150))
 truthy(document.querySelector('[data-testid="search-input"]'), 'Ctrl+F 展开搜索框')
 eq(document.activeElement.dataset.testid, 'search-input', '搜索框获得焦点')
+
+// F5 在输入框聚焦时也走应用自己的刷新(旧行为):没有 preventDefault 的话
+// WebView 会整页重载,注入的这段脚本会连同页面一起消失 —— 那样本步骤会直接超时失败
+document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'F5', bubbles: true, cancelable: true }))
+await new Promise((r) => setTimeout(r, 500))
+truthy(
+  (document.querySelector('[data-testid="toast"]')?.textContent ?? '').includes('已刷新'),
+  'F5 在输入框里也走应用的刷新'
+)
 
 // 输入框聚焦时 N 不应打开弹窗(事件派发到聚焦元素,与真实按键一致)
 document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'n', bubbles: true }))

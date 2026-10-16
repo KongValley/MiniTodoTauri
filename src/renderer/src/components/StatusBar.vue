@@ -17,58 +17,95 @@ async function onSnooze(): Promise<void> {
   const res = (await window.todoAPI.invoke(CH.appSnooze, 10)) as { ok: boolean; error?: string }
   toast(res.ok ? '已设置：10 分钟后提醒' : `设置失败：${res.error ?? '未知原因'}`)
 }
+
+/** 数据目录:完整路径塞不进底栏,收成一个按钮,路径放 title / aria-label */
+async function openDataDir(): Promise<void> {
+  const res = (await window.todoAPI.invoke(CH.storeOpenDir)) as { ok: boolean; error?: string }
+  if (!res.ok) toast(`打开数据目录失败：${res.error ?? '未知原因'}`)
+}
 </script>
 
 <template>
   <footer class="statusbar" data-testid="statusbar">
-    <span class="path" :title="state.path">{{ state.path }}</span>
-    <span v-if="hitCount !== null" class="hint">搜索命中 {{ hitCount }} 条</span>
+    <button class="dir" :title="state.path" :aria-label="`打开数据目录：${state.path}`" @click="openDataDir">
+      数据目录
+    </button>
+    <span v-if="hitCount !== null" class="hint" data-testid="global-hits">全局搜索 {{ hitCount }} 项</span>
     <span class="spacer" />
-    <span v-if="state.saveFailed" class="save-err" data-testid="save-failed">保存失败，数据未写入磁盘</span>
+    <span v-if="state.saveFailed" class="save-err" data-testid="save-failed" role="alert">保存失败，数据未写入磁盘</span>
     <span class="today">今天待办 {{ todayCount }} 项</span>
     <button v-if="settingsState.value.notifyEnabled" class="snooze" data-testid="snooze" @click="onSnooze">
       稍后提醒
     </button>
-    <span class="hint">N 新建　Enter/F2 打开　Del 删除　B 切换视图　Ctrl+F 搜索　F5 刷新</span>
   </footer>
 </template>
 
 <style scoped>
+/* 底栏只留「全局搜索计数 / 今天待办 / 稍后提醒 / 保存失败」四件事,
+   长串快捷键移进帮助弹窗(快捷键表本来就是它的正式去处) */
 .statusbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 5px 14px;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 20px;
   border-top: 1px solid var(--line);
   background: var(--status);
   color: var(--text-dim);
   font-size: 12px;
 }
 
-.path {
-  max-width: 380px;
+.dir {
+  flex: 0 1 auto;
+  min-width: 0;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--field-line);
+  background: var(--card);
+  color: var(--text-dim);
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.spacer {
-  flex: 1 1 auto;
-}
-
-.today {
+.dir:hover {
+  background: var(--hover);
   color: var(--text);
 }
 
+.spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+.today {
+  flex: 0 0 auto;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* 保存失败不可被省略号吃掉:宁愿换行也要看全 */
 .save-err {
+  flex: 0 0 auto;
   color: var(--danger);
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.hint {
+  flex: 0 1 auto;
+  white-space: nowrap;
 }
 
 .snooze {
-  padding: 2px 8px;
+  flex: 0 0 auto;
+  min-height: 26px;
+  padding: 0 10px;
   border: 1px solid var(--field-line);
-  border-radius: 5px;
+  border-radius: var(--radius-control);
   background: var(--card);
   color: var(--text-dim);
   font-size: 12px;
@@ -77,9 +114,5 @@ async function onSnooze(): Promise<void> {
 .snooze:hover {
   background: var(--hover);
   color: var(--text);
-}
-
-.hint {
-  color: var(--text-mute);
 }
 </style>

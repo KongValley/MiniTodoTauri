@@ -1,29 +1,40 @@
-/* 调色板:键名对齐旧版 Theme.cs 的 19 个语义色。组件样式一律用 var(--*),禁止硬编码十六进制。 */
+/* 调色板:键名对齐旧版 Theme.cs 的语义色,外加「柔和卡片」新增的形状/层级 token。
+   组件样式一律用 var(--*),禁止硬编码十六进制(清单自定义颜色来自数据,不在此列)。 */
 :root {
-  --bg: #fbfcfd;
-  --panel: #f3f5f8;
+  --bg: #f5f6fa;
+  --panel: #eef1f6;
   --card: #ffffff;
-  --hover: #eef1f5;
-  --sel: #e4eaf3;
-  --line: #d5dae1;
-  --text: #14181f;
-  --text-dim: #5d6673;
-  --text-mute: #9aa3af;
-  --accent: #2563eb;
-  --accent-soft: #e5edfb;
-  --field: #ffffff;
-  --field-line: #c3cad3;
-  --status: #f3f5f8;
-  --shadow: #d3d9e0;
-  --card-hi: #f7f9fc;
-  --rail-active: #e2e8f0;
+  --hover: #e9edf5;
+  --sel: #e8edff;
+  --line: #dde3ec;
+  --text: #252c3a;
+  --text-dim: #596579;
+  --text-mute: #606c80;
+  --accent: #4864c0;
+  --accent-soft: #e8edff;
+  --on-accent: #ffffff;
+  --field: #fafbfe;
+  --field-line: #7b899e;
+  --status: #f5f6fa;
   --track: #eceff3;
   --thumb: #b6bec9;
   --thumb-hot: #8b95a3;
-  --prio-1: #d34a3e;
-  --prio-2: #dd9e28;
-  --prio-3: #3c9954;
-  --danger: #d34a3e;
+  --prio-1: #b74746;
+  --prio-2: #8d681b;
+  --prio-3: #347152;
+  /* 优先级软背景:卡片/标记的底,不与文字抢对比 */
+  --prio-1-soft: #faecea;
+  --prio-2-soft: #faf1d9;
+  --prio-3-soft: #e9f4ed;
+  --danger: #b74746;
+  /* 形状三档:控件 / 卡片 / 弹窗 */
+  --radius-control: 8px;
+  --radius-card: 14px;
+  --radius-dialog: 18px;
+  /* 层级两档:卡片常态、浮层(菜单/弹窗/提示) */
+  --shadow-card: 0 2px 8px rgb(31 45 75 / 6%);
+  --shadow-popover: 0 16px 48px rgb(31 45 75 / 16%);
+  --overlay: rgb(25 35 55 / 28%);
   /* 图标双色:ico-* 为主色,ico-*-2 为阴影/次级色。SVG 图标不描边,靠这两层出体积感 */
   --ico-blue: #2f6fe4;
   --ico-blue-2: #1c4bb0;
@@ -43,30 +54,34 @@
 }
 
 [data-theme='dark'] {
-  --bg: #101418;
-  --panel: #171c22;
-  --card: #1e242c;
-  --hover: #262d37;
-  --sel: #2b3440;
-  --line: #2c343d;
-  --text: #e8ebf0;
-  --text-dim: #98a2af;
-  --text-mute: #66707d;
-  --accent: #4b83f0;
-  --accent-soft: #1d2a44;
-  --field: #171c22;
-  --field-line: #39424e;
-  --status: #171c22;
-  --shadow: #080a0c;
-  --card-hi: #232a33;
-  --rail-active: #2a323d;
+  --bg: #171b24;
+  --panel: #1d2330;
+  --card: #252c3a;
+  --hover: #30394a;
+  --sel: #333f59;
+  --line: #394457;
+  --text: #eef2fa;
+  --text-dim: #b1bfd4;
+  --text-mute: #9aaac2;
+  --accent: #9fb4ff;
+  --accent-soft: #333f59;
+  --on-accent: #172040;
+  --field: #202735;
+  --field-line: #687993;
+  --status: #1d2330;
   --track: #222a33;
   --thumb: #414b57;
   --thumb-hot: #5a6673;
-  --prio-1: #e8705f;
-  --prio-2: #ecc06a;
-  --prio-3: #5cbc7f;
-  --danger: #e8705f;
+  --prio-1: #f3a7a0;
+  --prio-2: #e8c27c;
+  --prio-3: #8eceaa;
+  --prio-1-soft: #453236;
+  --prio-2-soft: #403b2d;
+  --prio-3-soft: #2c4038;
+  --danger: #f3a7a0;
+  --shadow-card: 0 2px 8px rgb(0 0 0 / 12%);
+  --shadow-popover: 0 16px 48px rgb(0 0 0 / 32%);
+  --overlay: rgb(4 8 16 / 55%);
   /* 图标双色:深色下整体提亮,次级色也要跟上,否则阴影层会糊成一片 */
   --ico-blue: #6d9df5;
   --ico-blue-2: #4f7fd8;
@@ -98,7 +113,7 @@ body,
 
 body {
   font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
-  font-size: 13px;
+  font-size: 14px;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
@@ -120,8 +135,8 @@ textarea {
   color: var(--text);
   background: var(--field);
   border: 1px solid var(--field-line);
-  border-radius: 6px;
-  padding: 5px 8px;
+  border-radius: var(--radius-control);
+  padding: 6px 10px;
   outline: none;
   user-select: text;
 }
@@ -134,10 +149,48 @@ textarea:focus {
 
 input[type='checkbox'] {
   padding: 0;
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
   accent-color: var(--accent);
   cursor: pointer;
+}
+
+/* 键盘焦点:只在 Tab/程序化聚焦时画环,鼠标点击不闪 */
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* 过渡只限不触发布局的三个属性(120ms);低配模式与「减少动态效果」下取消 */
+button,
+input,
+select,
+textarea,
+[data-card],
+[data-row],
+.row {
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+  }
 }
 
 ::-webkit-scrollbar {

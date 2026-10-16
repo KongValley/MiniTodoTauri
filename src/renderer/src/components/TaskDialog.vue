@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { today } from '@shared/dates'
 import { addTodo, newId, removeTodos, setStatus, updateTodo } from '@shared/store-ops'
 import {
@@ -16,19 +16,22 @@ import {
   type Subtask
 } from '@shared/types'
 import { mutate, state } from '../store/data'
-import { closeDialog, requestNew, ui } from '../store/ui'
-import { isComposingEvent } from '../lib/keymap'
+import { closeDialog, requestNew, ui, type TaskDialogState } from '../store/ui'
+import { isComposingEvent } from '../lib/input-events'
+import { useDialogFocus } from '../lib/dialog-focus'
 import Icon from './Icon.vue'
 
-const dialog = ui.dialog as { mode: 'new' | 'edit'; id?: string; presetDate?: string; presetList?: string }
+const dialog = ui.dialog as TaskDialogState
 
 const existing = dialog.mode === 'edit' ? state.store.todos.find((t) => t.id === dialog.id) : undefined
 
 const form = reactive({
-  title: existing?.title ?? '',
+  title: existing?.title ?? dialog.presetTitle ?? '',
   note: existing?.note ?? '',
-  noDate: existing ? existing.date === '' : dialog.presetDate === undefined,
-  date: existing?.date && existing.date !== '' ? existing.date : (dialog.presetDate ?? today()),
+  // 预设日期为空字符串与「没有预设」同义:两者都不勾「不排期」是没有道理的,
+  // 收集箱/未排期语境下新建本来就该是未排期
+  noDate: existing ? existing.date === '' : dialog.presetDate === undefined || dialog.presetDate === '',
+  date: existing?.date && existing.date !== '' ? existing.date : dialog.presetDate || today(),
   lid: existing?.lid ?? dialog.presetList ?? '',
   prio: (existing?.prio ?? 2) as Prio,
   status: (existing?.status ?? ACTIVE) as Status,
@@ -38,6 +41,24 @@ const form = reactive({
 
 const titleInput = ref<HTMLInputElement | null>(null)
 const newSub = ref('')
+
+const rootEl = ref<HTMLElement | null>(null)
+
+/**
+ * 初次聚焦标题,光标放末尾 —— 「详细编辑」转交过来的草稿要能直接续写,
+ * 而不是从头覆盖。焦点由 dialog-focus 统一在挂载后给到最上面的弹窗。
+ */
+function focusTitle(): HTMLElement | null {
+  const el = titleInput.value
+  if (el) {
+    el.focus()
+    const end = el.value.length
+    el.setSelectionRange(end, end)
+  }
+  return el
+}
+
+const { isTopmost } = useDialogFocus(rootEl, closeDialog, focusTitle)
 
 const canSave = computed(() => form.title.trim() !== '')
 const isEdit = computed(() => dialog.mode === 'edit')
@@ -50,8 +71,6 @@ const listsByGroup = computed(() =>
 )
 
 const statusOptions = computed(() => [ACTIVE, DONE, DROPPED] as Status[])
-
-onMounted(() => void nextTick(() => titleInput.value?.focus()))
 
 /** 选词中的回车不上屏的是半成品标题,不能当保存 */
 function onEnterSave(e: KeyboardEvent): void {
@@ -119,11 +138,19 @@ function removeSub(index: number): void {
 
 <template>
   <Teleport to="body">
-    <div class="overlay" data-testid="task-dialog" @click.self="closeDialog">
-      <div class="dialog" @keydown.esc="closeDialog">
-        <h2 class="dt">{{ isEdit ? '编辑任务' : '新建任务' }}</h2>
+    <div class="overlay" data-testid="task-dialog" :inert="isTopmost ? undefined : true" @click.self="closeDialog">
+      <div
+        ref="rootEl"
+        class="dialog"
+        role="dialog"
+        aria-labelledby="task-dialog-title"
+        :aria-modal="isTopmost ? 'true' : undefined"
+      >
+        <h2 id="task-dialog-title" class="dt">{{ isEdit ? '编辑任务' : '新建任务' }}</h2>
 
-        <label class="field">
+        <!-- 表单区独立滚动,footer 永远留在可视区内(长备注/多子任务时不用滚到底找按钮) -->
+        <div class="form-body">
+          <label class="field">
           <span class="lbl">任务标题</span>
           <input ref="titleInput" v-model="form.title" data-testid="dlg-title" placeholder="要做什么？" @keydown.enter="onEnterSave" />
         </label>
@@ -192,6 +219,7 @@ function removeSub(index: number): void {
             </div>
           </div>
         </div>
+        </div>
 
         <div class="foot">
           <button v-if="isEdit" class="btn danger" data-testid="dlg-delete" @click="removeThis">移入回收站</button>
@@ -211,7 +239,7 @@ function removeSub(index: number): void {
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgb(0 0 0 / 35%);
+  background: var(--overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -219,19 +247,30 @@ function removeSub(index: number): void {
 }
 
 .dialog {
-  width: 460px;
-  max-height: 90vh;
-  overflow-y: auto;
-  padding: 18px 20px 14px;
-  border-radius: 10px;
+  width: 520px;
+  max-width: calc(100vw - 48px);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  border-radius: var(--radius-dialog);
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 12px 40px rgb(0 0 0 / 25%);
+  box-shadow: var(--shadow-popover);
+}
+
+/* 只有表单区滚动:标题与按钮永远在看得见的地方 */
+.form-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .dt {
-  margin: 0 0 14px;
-  font-size: 15px;
+  margin: 0 0 16px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .field {
@@ -275,7 +314,7 @@ function removeSub(index: number): void {
 
 .subs {
   border: 1px solid var(--field-line);
-  border-radius: 6px;
+  border-radius: var(--radius-control);
   padding: 6px;
   background: var(--field);
 }
@@ -323,7 +362,10 @@ function removeSub(index: number): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 6px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  flex: 0 0 auto;
 }
 
 .spacer {
@@ -331,8 +373,9 @@ function removeSub(index: number): void {
 }
 
 .btn {
-  padding: 6px 16px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 0 16px;
+  border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
 }
@@ -349,11 +392,16 @@ function removeSub(index: number): void {
 .btn.primary {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
+}
+
+.btn.danger {
+  color: var(--danger);
+  border-color: var(--danger);
 }
 
 .btn.primary:hover:not(:disabled) {
-  filter: brightness(1.08);
+  box-shadow: var(--shadow-card);
 }
 
 .btn.danger {

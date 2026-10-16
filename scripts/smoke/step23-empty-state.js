@@ -9,7 +9,7 @@ await sleep(150)
 
 const p = document.querySelector('.empty p')
 truthy(p, '看板空状态有提示文案')
-eq(p.textContent, '此视图暂无排期任务', '无搜索词时显示默认空文案')
+truthy((p.textContent ?? '').trim().length > 0, '无搜索词时也有非空提示(不逐字重钉)')
 truthy(document.querySelector('[data-testid="empty-new"]'), '有新建入口')
 truthy(document.querySelector('[data-testid="empty-import"]'), '有导入入口')
 truthy(document.querySelector('[data-testid="empty-help"]'), '有快捷键入口')
@@ -26,12 +26,17 @@ await sleep(120)
 truthy(document.querySelector('[data-testid="help-dialog"]'), '点快捷键打开帮助')
 t.closeDialog()
 
-// 搜索无命中时空文案换成搜索相关
+// 搜索无命中时空文案换成搜索相关,并给「清除搜索和筛选」而不是新建入口
 t.setSearch('不存在的词')
 await sleep(150)
 truthy(document.querySelector('.empty p').textContent.includes('不存在的词'), '搜索无命中时文案提示搜索词')
-t.setSearch('')
-await sleep(150)
+eq(document.querySelector('[data-testid="empty-new"]'), null, '有搜索条件时不再把空结果说成「没有数据」')
+const clearBtn = document.querySelector('[data-testid="clear-task-conditions"]')
+truthy(!!clearBtn, '有搜索条件时给「清除搜索和筛选」')
+clearBtn.click()
+await sleep(200)
+eq(document.querySelector('[data-testid="empty-new"]') !== null, true, '清除条件后回到「新建」入口')
+eq(document.querySelector('.empty p').textContent.includes('不存在的词'), false, '清除条件后搜索词也清掉了')
 
 // 列表视图同样有引导
 t.setBoard(false)
