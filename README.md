@@ -70,23 +70,22 @@
 
 ### 安装版 / 绿色版
 
-`release/` 下按系统与架构分目录：
+`release/` 下只有一个分发目录：
 
 | 目录 | 适用 |
 | --- | --- |
-| `Win7-32位` | Windows 7 SP1 32 位（64 位系统两种包均可，32 位系统必须用这个） |
-| `Win7-64位` | Windows 7 SP1 64 位；Windows 10 / 11 也直接用这两套包 |
+| `Win7-32位` | Windows 7 SP1 / 10 / 11（32 位与 64 位系统都装这一套；32 位系统只能用它） |
 
 每个目录里有两个分发物，任选其一：
 
 | 文件 | 用法 |
 | --- | --- |
-| `mini-todo-setup-<版本>-<平台>.exe` | **安装版**：双击走安装向导，装到当前用户目录，自动建开始菜单快捷方式 |
-| `mini-todo-portable-<版本>-<平台>.zip` | **绿色版**：解压后双击里面的 exe，无需安装。**建议先建一个专用文件夹再解压**（zip 没有外层目录，直接解压会与当前目录已有文件混在一起） |
+| `mini-todo-setup-<版本>-win7-ia32.exe` | **安装版**：双击走安装向导，装到当前用户目录，自动建开始菜单快捷方式 |
+| `mini-todo-portable-<版本>-win7-ia32.zip` | **绿色版**：解压后双击里面的 exe，无需安装。**建议先建一个专用文件夹再解压**（zip 没有外层目录，直接解压会与当前目录已有文件混在一起） |
 
-两种分发物的启动速度相同（都在本机直接运行，不做解压）。体积参考：安装版约 155 MB（32 位）/ 177 MB（64 位），绿色版约 167/187 MB——包内自带一份 WebView2 109 固定版运行时（只保留 `en-US`/`zh-CN` 语言包，其余 82 个已裁掉）。安装包用 NSIS 的 **bzip2** 档（不是默认 LZMA）：比 LZMA 大约 20%，换来每次打包少花约 100 秒。
+两种分发物的启动速度相同（都在本机直接运行，不做解压）。体积参考：安装版约 155 MB，绿色版约 167 MB——包内自带一份 WebView2 109 固定版运行时（只保留 `en-US`/`zh-CN` 语言包，其余 82 个已裁掉）。安装包用 NSIS 的 **bzip2** 档（不是默认 LZMA）：比 LZMA 大约 20%，换来每次打包少花约 100 秒。
 
-**Windows 7 前置要求**：需 **Windows 7 SP1**，并补装 `前置补丁/` 里的 4 个 `.msu`（安装顺序见该目录的《安装说明.txt》，先装 KB4490628 再装 KB4474419）。**运行时不需联网、不需单独安装**。
+**Windows 7 前置要求**：需 **Windows 7 SP1**，并补装 `前置补丁/` 里的 4 个 `.msu`（安装顺序见该目录的《安装说明.txt》，先装 KB4490628 再装 KB4474419）。随包补丁是 **x86**：64 位 Windows 7 需要按《安装说明.txt》里的官方地址另行下载 64 位系统补丁。**运行时不需联网、不需单独安装**。
 
 **Windows 10 / 11**：同一套包直接可用、不需要前置补丁；应用启动时**检测到系统自带 WebView2 就优先用系统版**（更新、持续有安全更新），只有系统没有时才回退包内的 109。
 
@@ -136,36 +135,35 @@ npm run perf         # 三档 × 3 次取中位数，结果写 tmp/perf-current.
 
 ### Windows 7 打包的前置材料（首次打 Win7 包前准备）
 
-- `win7-patches/`：4 个 `.msu` 前置补丁（121 MB，已 gitignore，从旧仓库复制或自行下载）
-- WebView2 109 固定版运行时：`npm run fetch:runtime`（从种子 Release `webview2-109` 下载 cab 并展开；也可手动把 cab 放进 `webview2-109/`，或把已展开的运行时目录放进 `webview2-runtime-x86/`、`webview2-runtime-x64/`）
+- `win7-patches/`：4 个 x86 `.msu` 前置补丁（约 60 MB，已 gitignore，从旧仓库复制或自行下载）
+- WebView2 109 固定版运行时：`npm run fetch:runtime`（从种子 Release `webview2-109` 下载 x86 cab 并展开；也可手动把 cab 放进 `webview2-109/`，或把已展开的运行时目录放进 `webview2-runtime-x86/`）
 
-打包（每架构一条，产物在 `release/<中文目录>/`）：
+打包（产物在 `release/Win7-32位/`）：
 
 ```bash
-npm run dist             # 两个架构并行打（16 核本机约 2.5 分钟）
-npm run dist:win7-32     # 只打 32 位（→ release/Win7-32位/，约 1.5 分钟）
-npm run dist:win7-64     # 只打 64 位（→ release/Win7-64位/，约 2.5 分钟）
+npm run dist             # 打 32 位（安装包 + 绿色版，约 1.5–2.5 分钟）
+npm run dist:win7-32     # 同上，保留的具名入口
 npm run zip:win7-32      # 快速迭代：只重建 exe + 绿色版 zip，不动安装包（约 1 分钟）
-npm run zip:win7-64
 ```
 
-单组合约 1.5–2.5 分钟，四段成本：cargo release 编译 35–80 秒（`codegen-units = 16`，为打包速度放弃了 `1` 的体积收益）、**NSIS bzip2 压缩约 35 秒**（320 MB 载荷；LZMA 档要 136 秒、安装包小 20%）、绿色版 staging 复制 + `Compress-Archive` 约 20 秒、`vue-tsc` 类型检查约 6 秒（vite 由 tauri 的 `beforeBuildCommand` 跑，脚本不再重复跑第二遍）。`npm run dist` 并发跑两个组合：cargo 对 target 目录加锁会自动串行，单核的 makensis/zip 正好与另一组合的编译重叠（11 分钟 → 2.5 分钟）。CI 是 2 核 runner，请继续用 `dist:win7-32` / `dist:win7-64` 单架构串行。
+单次打包四段成本：cargo release 编译 35–80 秒（`codegen-units = 16`，为打包速度放弃了 `1` 的体积收益）、**NSIS bzip2 压缩约 35 秒**（320 MB 载荷；LZMA 档要 136 秒、安装包小 20%）、绿色版 staging 复制 + `Compress-Archive` 约 20 秒、`vue-tsc` 类型检查约 6 秒（vite 由 tauri 的 `beforeBuildCommand` 跑，脚本不再重复跑第二遍）。
 
 ## 性能
 
-5000 条任务下（同一台机器，`npm run perf` 三次运行的中位数范围；单次运行会受机器负载影响）：
+**x86（i686）**，同一台机器，`npm run perf` 五次运行的中位数范围（单次运行会受机器负载影响）：
 
 | 交互 | 耗时 | 说明 |
 | --- | --- | --- |
-| 切换视图 | **15–21 ms** | |
-| 切到列表并滚到底 | **28–35 ms** | |
+| 切换视图 | **12–22 ms** | |
+| 切到列表并滚到底 | **30–42 ms** | |
 | 完成一条任务 | **14–35 ms** | 同步段 0.2–1.3 ms，其余是索引重建 + 渲染 |
-| 拖拽改期 | **11–36 ms** | |
-| 新建任务 | **10–27 ms** | |
-| 搜索 | **13–28 ms** | |
-| 连续完成 3 条 | **11–94 ms**（500→5000 条） | 3 次变更 2–5 ms，只写一次盘；磁盘往返本身随载荷线性增长 |
+| 拖拽改期 | **12–35 ms** | |
+| 新建任务 | **14–29 ms** | |
+| 搜索 | **15–28 ms** | |
+| 落盘 flush | **14–60 ms**（500→5000 条） | 磁盘往返随载荷线性增长；同一批改动只写一次盘 |
 | 主线程总阻塞 | **0 ms**（三档均为 0） | |
-| DOM 卡片数 / 列表行数 | **60 / 60**（窗口化渲染，模型 5000） | |
+| DOM 卡片数 / 列表行数 | **50 / 50**（窗口化渲染，模型 5000） | 卡片更紧凑，一屏放得下更多 |
+| 私有提交 | **约 263–294 MB** | 低于改版前同一台机器的 302 MB（去掉了逐卡片阴影） |
 
 拆分数据层与渲染层的成本，用审计探针（比总墙钟更能定位回归）：
 
@@ -176,7 +174,7 @@ cp tmp/perf-pristine/5000.json tmp/audit-run/todos.json
 TODO_SMOKE=1 TODO_SMOKE_SCRIPT=scripts/perf-audit-probe.js \
   TODO_SMOKE_OUT=tmp/audit-out.json TODO_SMOKE_ROOT="$PWD" \
   TODO_DATA_DIR="$PWD/tmp/audit-run" TODO_SMOKE_TIMEOUT=90000 TODO_SMOKE_SETTLE=300 \
-  ./src-tauri/target/x86_64-pc-windows-msvc/release/mini-todo.exe
+  ./src-tauri/target/i686-pc-windows-msvc/release/mini-todo.exe
 ```
 
 关键设计（改这些地方时注意别退回去）：
@@ -282,7 +280,7 @@ scripts/fetch-webview2-runtime.mjs  WebView2 109 运行时获取与展开
 scripts/sync-version.mjs  package.json ↔ tauri.conf.json 版本同步
 scripts/gen-normalize-fixtures.mjs  normalize fixture 生成（TS 实现为准）
 scripts/gen-perf-data.mjs / perf-probe.js / perf-compare.mjs  性能基准
-.github/workflows/release.yml  云端双架构打包 + 发 Release
+.github/workflows/release.yml  云端 32 位打包 + 发 Release
 ```
 
 ## 已知限制
@@ -294,11 +292,11 @@ scripts/gen-perf-data.mjs / perf-probe.js / perf-compare.mjs  性能基准
 - 提醒时间用本机时区，不处理跨时区
 - 渲染内核是 WebView2：Win7 上固定为 109（2023 年 1 月后无安全更新，与旧 Electron 22 同样是冻结内核，且版本更高）；Win10/11 跟随系统更新
 - 渲染进程崩溃自动重载（连续崩超 3 次停止重载，需手动重启）；崩溃瞬间未落盘改动会丢
-- 安装包体积 155 MB（32 位）/ 177 MB（64 位），内含 WebView2 固定版运行时
+- 安装包体积约 155 MB，内含 WebView2 固定版运行时；只有 32 位一种架构
 
 ## 发布（GitHub Actions 云端打包）
 
-`.github/workflows/release.yml` 在 GitHub 的 windows runner 上跑**同一套** `scripts/package-win.mjs`，四个架构并行，产物直接传成 Release 资产。本地打包的路径仍然保留，两条路互不依赖。
+`.github/workflows/release.yml` 在 GitHub 的 windows runner 上跑**同一套** `scripts/package-win.mjs`（只打 win7-ia32），产物直接传成 Release 资产。本地打包的路径仍然保留，两条路互不依赖。
 
 **一次性准备**（各传一个常驻种子 Release，CI 从那里取；`win7-patches/` 与 `webview2-109/` 都已 gitignore）：
 
@@ -307,7 +305,7 @@ gh release create win7-patches --title "Win7 前置补丁源" --notes "CI 构建
 gh release create webview2-109 --title "WebView2 109 固定版运行时源" --notes "CI 构建时按架构取用,勿删" webview2-109/*.cab webview2-109/*.nupkg
 ```
 
-（运行时压缩包两种格式都收：微软官方固定版是 `.cab`；从 NuGet 镜像取的 `webview2.runtime.<arch>.109.0.1518.78.nupkg` 也可以。`scripts/fetch-webview2-runtime.mjs` 会自动识别并展开。）
+（运行时压缩包两种格式都收：微软官方固定版是 `.cab`；从 NuGet 镜像取的 `webview2.runtime.x86.109.0.1518.78.nupkg` 也可以。`scripts/fetch-webview2-runtime.mjs` 会自动识别并展开。）
 
 **每次发布**，二选一：
 
@@ -316,9 +314,9 @@ gh release create webview2-109 --title "WebView2 109 固定版运行时源" --no
 | 网页触发 | Actions → release → Run workflow，填版本号（留空取 `package.json`）；`publish=false` 可只验证构建不发布 |
 | 打 tag | `node scripts/sync-version.mjs 1.2.0 && git commit -am "chore: 1.2.0" && git tag v1.2.0 && git push origin main v1.2.0`（tag 与 package.json 版本不一致会直接拒绝发布） |
 
-流水线做的事：`npm ci` → 按架构下载 `.msu` 与 WebView2 运行时压缩包 → `node scripts/sync-version.mjs <版本>`（同步写 package.json 与 tauri.conf.json）→ `node scripts/package-win.mjs <架构>` → 汇总成 Release 资产：**2 个安装版 exe** + **2 个绿色版 zip** + **8 个 `.msu`**（两个架构各 4 个）+ **1 份 `win7-patches-readme.txt`**（两个架构各有一份中文《安装说明.txt》，只取一份），共 13 个。tag 已存在时会先删旧 Release 再重建，方便重跑。
+流水线做的事：`npm ci` → 下载 x86 `.msu` 与 WebView2 运行时压缩包 → `node scripts/sync-version.mjs <版本>`（同步写 package.json 与 tauri.conf.json）→ `node scripts/package-win.mjs win7-ia32` → 汇总成 Release 资产：**1 个安装版 exe** + **1 个绿色版 zip** + **4 个 x86 `.msu`** + **1 份 `win7-patches-readme.txt`**，共 7 个。tag 已存在时会先删旧 Release 再重建，方便重跑。
 
-汇总只收 `mini-todo-*.exe` / `mini-todo-*.zip` 与 `前置补丁/` 下的 `.msu`。**资产名一律 ASCII** —— `gh release create` 会把非 ASCII 文件名压成 `default.txt`，所以本地分发目录里用中文名，上传前复制成 `win7-patches-readme.txt`；资产数不等于 13、或 `dist/` 里出现非 ASCII 文件名，流水线都会失败。
+汇总只收 `mini-todo-*.exe` / `mini-todo-*.zip` 与 `前置补丁/` 下的 `.msu`。**资产名一律 ASCII** —— `gh release create` 会把非 ASCII 文件名压成 `default.txt`，所以本地分发目录里用中文名，上传前复制成 `win7-patches-readme.txt`；资产数不等于 7、或 `dist/` 里出现非 ASCII 文件名，流水线都会失败。
 
 补丁或运行时取不到时流水线**直接失败**，不会产出一个跑不起来的 Win7 包——那种包在 Win7 机器上根本起不来，静默发布比构建失败危险得多。
 

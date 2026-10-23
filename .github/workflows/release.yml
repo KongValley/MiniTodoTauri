@@ -6,10 +6,10 @@
 #   2. 本地 npm version 1.2.0 && git push origin v1.2.0
 #
 # 前置条件（只需做一次，各传一个常驻 Release）：
-#   - Win7 前置补丁（4 个 .msu × 2 架构，仓库里没有，已 gitignore）：
+#   - Win7 前置补丁（4 个 x86 .msu，仓库里没有，已 gitignore）：
 #       gh release create win7-patches --title "Win7 前置补丁源" --notes "CI 构建时按架构取用,勿删" win7-patches/*.msu
 #   - WebView2 109 固定版运行时（Win7 最后受支持的版本）：
-#       gh release create webview2-109 --title "WebView2 109 固定版运行时源" --notes "CI 构建时按架构取用,勿删" Microsoft.WebView2.FixedVersionRuntime.109.*.x86.cab Microsoft.WebView2.FixedVersionRuntime.109.*.x64.cab
+#       gh release create webview2-109 --title "WebView2 109 固定版运行时源" --notes "CI 构建时按架构取用,勿删" Microsoft.WebView2.FixedVersionRuntime.109.*.x86.cab
 #
 # 取不到补丁或运行时，CI 一律**硬失败**而不是继续 —— 静默产出一个跑不起来的 Win7 包
 # 危险得多（缺补丁会在老系统上起不来，缺运行时则直接打不开窗口）。
@@ -45,12 +45,8 @@ env:
 
 jobs:
   build:
-    name: 打包 ${{ matrix.combo }}
+    name: 打包 win7-ia32
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        combo: [win7-ia32, win7-x64]
     steps:
       - uses: actions/checkout@v4
 
@@ -59,12 +55,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.77.2
-          targets: i686-pc-windows-msvc, x86_64-pc-windows-msvc
+          targets: i686-pc-windows-msvc
 
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-          key: ${{ matrix.combo }}
+          key: win7-ia32
 
       - uses: actions/setup-node@v4
         with:
@@ -94,14 +90,13 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          ARCH_TOKEN=x86; case "${{ matrix.combo }}" in *-x64) ARCH_TOKEN=x64;; esac
           mkdir -p win7-patches
-          if ! gh release download "$PATCHES_TAG" --pattern "*${ARCH_TOKEN}*.msu" --dir win7-patches --clobber; then
-            echo "::error::取不到 $PATCHES_TAG Release 的 ${ARCH_TOKEN} 补丁。一次性准备:gh release create $PATCHES_TAG --title 'Win7 前置补丁源' --notes 'CI 构建时按架构取用,勿删' win7-patches/*.msu"
+          if ! gh release download "$PATCHES_TAG" --pattern "*x86*.msu" --dir win7-patches --clobber; then
+            echo "::error::取不到 $PATCHES_TAG Release 的 x86 补丁。一次性准备:gh release create $PATCHES_TAG --title 'Win7 前置补丁源' --notes 'CI 构建时按架构取用,勿删' win7-patches/*.msu"
             exit 1
           fi
           N=$(ls win7-patches/*.msu | wc -l)
-          echo "已取补丁:$N 个(${ARCH_TOKEN})"
+          echo "已取补丁:$N 个(x86)"
           if [ "$N" -ne 4 ]; then
             echo "::error::预期 4 个 .msu,实际 $N 个 —— 补丁源不完整,拒绝产出裸包"
             ls -l win7-patches
@@ -114,10 +109,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p webview2-109
-          # 种子 Release 里放的是 .cab（微软官方）或 .nupkg（NuGet 镜像包），两种都收
-          if ! gh release download "$RUNTIME_TAG" --pattern "*.cab" --dir webview2-109 --clobber 2>/dev/null; then
-            if ! gh release download "$RUNTIME_TAG" --pattern "*.nupkg" --dir webview2-109 --clobber; then
-              echo "::error::取不到 $RUNTIME_TAG Release 的运行时压缩包。一次性准备:gh release create $RUNTIME_TAG --title 'WebView2 109 固定版运行时源' --notes 'CI 构建时按架构取用,勿删' *.cab *.nupkg"
+          # 种子 Release 里放的是 .cab（微软官方）或 .nupkg（NuGet 镜像包，如
+          # webview2.runtime.x86.109.0.1518.78.nupkg），两种都收
+          if ! gh release download "$RUNTIME_TAG" --pattern "*.x86.cab" --dir webview2-109 --clobber 2>/dev/null; then
+            if ! gh release download "$RUNTIME_TAG" --pattern "*.x86*.nupkg" --dir webview2-109 --clobber; then
+              echo "::error::取不到 $RUNTIME_TAG Release 的 x86 运行时压缩包。一次性准备:gh release create $RUNTIME_TAG --title 'WebView2 109 固定版运行时源' --notes 'CI 构建时按架构取用,勿删' *.cab *.nupkg"
               exit 1
             fi
           fi
@@ -127,22 +123,19 @@ jobs:
       # package-win.mjs 内部：版本一致性校验 → npm run build → tauri build(NSIS) →
       # 重命名产物 → 组绿色版 zip → Win7 复制补丁与《安装说明.txt》
       - name: 打包
-        run: node scripts/package-win.mjs ${{ matrix.combo }}
+        run: node scripts/package-win.mjs win7-ia32
 
       - name: 定位分发目录
         id: locate
         run: |
           set -euo pipefail
-          case "${{ matrix.combo }}" in
-            win7-ia32)  LABEL="Win7-32位" ;;
-            win7-x64)   LABEL="Win7-64位" ;;
-          esac
+          LABEL="Win7-32位"
           [ -d "release/$LABEL" ] || { echo "::error::分发目录 release/$LABEL 不存在"; exit 1; }
           echo "label=$LABEL" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: pkg-${{ matrix.combo }}
+          name: pkg-win7-ia32
           path: release/${{ steps.locate.outputs.label }}/
           if-no-files-found: error
           retention-days: 7
@@ -157,7 +150,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          pattern: pkg-*
+          pattern: pkg-win7-ia32
           path: release
 
       # 摊平成单个资产目录。只收 mini-todo-*.exe / mini-todo-*.zip 与 前置补丁/ 下的 .msu，
@@ -175,10 +168,9 @@ jobs:
           find release -name '安装说明.txt' | sort | head -1 | xargs -r -I{} cp {} dist/win7-patches-readme.txt
           echo "--- 资产清单 ---"
           ls -lh dist
-          # 2 个安装版 exe + 2 个绿色版 zip + 8 个 msu（两个架构各 4 个）
-          # + 1 份说明（两个架构同名，只取一份）= 13
+          # 1 个安装版 exe + 1 个绿色版 zip + 4 个 x86 msu + 1 份说明 = 7
           N=$(ls dist | wc -l)
-          [ "$N" -eq 13 ] || { echo "::error::预期 13 个资产(2 exe + 2 zip + 8 msu + 1 说明),实际 $N"; exit 1; }
+          [ "$N" -eq 7 ] || { echo "::error::预期 7 个资产(1 exe + 1 zip + 4 msu + 1 说明),实际 $N"; exit 1; }
           if ls dist | grep -qP '[^\x20-\x7e]'; then
             echo "::error::存在非 ASCII 资产名,上传后会被 gh 压成 default.txt"
             ls dist
@@ -203,7 +195,7 @@ jobs:
           fi
           gh release create "$TAG" dist/* \
             --title "迷你待办 ${VERSION}" \
-            --notes "Rust/Tauri 重写版。Win7 双架构(32/64)安装版 + 绿色版,共 13 个资产 = 2 个安装版 exe + 2 个绿色版 zip + 8 个 .msu(两个架构各 4 个)+ 1 份说明。**两种分发物**:安装版双击 exe 走安装向导(装到当前用户目录);绿色版是 zip,解压到任意文件夹后双击里面的 exe 即可,不必安装(zip 无外层目录,建议先建一个专用文件夹再解压)。**Win7 用户**:先下载 win7-patches-readme.txt 看补丁安装顺序,按里面的顺序装完 4 个 .msu(先 KB4490628 再 KB4474419),再运行安装包或绿色版;包内自带 WebView2 109 运行时,无需联网。**Win10/11 用户**:同一套包可直接使用(检测到系统自带 WebView2 时优先用系统版),不需要补前置补丁。" \
+            --notes "Rust/Tauri 重写版。Win7 32 位安装版 + 绿色版,共 7 个资产 = 1 个安装版 exe + 1 个绿色版 zip + 4 个 x86 .msu + 1 份说明。**两种分发物**:安装版双击 exe 走安装向导(装到当前用户目录);绿色版是 zip,解压到任意文件夹后双击里面的 exe 即可,不必安装(zip 无外层目录,建议先建一个专用文件夹再解压)。**Win7 用户**:先下载 win7-patches-readme.txt 看补丁安装顺序,按里面的顺序装完 4 个 .msu(先 KB4490628 再 KB4474419),再运行安装包或绿色版;包内自带 WebView2 109 运行时,无需联网。随包补丁为 x86,64 位 Windows 7 需要另外下载 64 位系统补丁。**Win10/11 用户**:同一套包可直接使用(检测到系统自带 WebView2 时优先用系统版),不需要补前置补丁。" \
             --latest
           echo "已发布:$TAG"
 

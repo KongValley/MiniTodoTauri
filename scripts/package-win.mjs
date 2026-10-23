@@ -1,11 +1,10 @@
-// 单架构打包：node scripts/package-win.mjs <win7-ia32|win7-x64> [--zip-only] [--no-frontend]
+// 单架构打包：node scripts/package-win.mjs win7-ia32 [--zip-only]
 //   --zip-only    快速迭代：跳过 NSIS，只重建 exe + 绿色版 zip（安装包保留上次完整打包的产物）
-//   --no-frontend 渲染层已由 dist-all.mjs 统一构建过：跳过 sync-version/typecheck，并置空 tauri 的 beforeBuildCommand
-// 只出 Win7 双架构（32/64）：包内自带 WebView2 109 固定版运行时 —— Win7 上直接可用，
+// 只出 Win7 32 位：包内自带 WebView2 109 固定版运行时 —— Win7 上直接可用，
 // Win10/11 上装同一套包也能跑（检测到系统 WebView2 时优先用系统版，见 src-tauri/src/main.rs）。
-// 各组合 → release/<中文目录>/，含安装包（NSIS exe）与绿色版（zip，解压即用），文件名自明。
+// 产物 → release/Win7-32位/，含安装包（NSIS exe）与绿色版（zip，解压即用），文件名自明。
 // Tauri 版与 Electron 版的差异：绿色版 zip 由本脚本组 staging 目录后压缩（Tauri 无 zip 目标）；
-// Win7 组合额外把 WebView2 109 固定版运行时打进包内（exe 同目录的 webview2-runtime/）。
+// WebView2 109 固定版运行时打进包内（exe 同目录的 webview2-runtime/）。
 import { execFileSync, execSync } from 'node:child_process'
 import {
   cpSync,
@@ -38,38 +37,32 @@ const PATCH_README = `Windows 7 前置补丁(适用于本目录中的安装包�
 - KB4490628:https://www.catalog.update.microsoft.com/Search.aspx?q=KB4490628
 - KB4474419:https://www.catalog.update.microsoft.com/Search.aspx?q=KB4474419
 
+本目录的 x86 补丁仅适用于 32 位 Windows 7。64 位 Windows 7 运行本应用时仍需使用 64 位系统补丁,
+请从上面同一批官方地址另行下载。
+
 本应用完全离线运行,不联网、不校验代码签名;补上这些补丁可消除老系统上的兼容与渲染问题。
 补丁来自 Microsoft 官方渠道,均带 Microsoft 数字签名;Win10 及以上系统不需要这些补丁。
 `
 
-const combos = {
-  'win7-ia32': {
-    label: 'Win7-32位',
-    triple: 'i686-pc-windows-msvc',
-    overlay: 'src-tauri/tauri.win7-ia32.conf.json',
-    runtime: 'webview2-runtime-x86',
-    patchArch: 'x86'
-  },
-  'win7-x64': {
-    label: 'Win7-64位',
-    triple: 'x86_64-pc-windows-msvc',
-    overlay: 'src-tauri/tauri.win7-x64.conf.json',
-    runtime: 'webview2-runtime-x64',
-    patchArch: 'x64'
-  }
+const CFG = {
+  label: 'Win7-32位',
+  triple: 'i686-pc-windows-msvc',
+  overlay: 'src-tauri/tauri.win7-ia32.conf.json',
+  runtime: 'webview2-runtime-x86',
+  patchArch: 'x86'
 }
 
 const args = process.argv.slice(2)
 const zipOnly = args.includes('--zip-only')
-const noFrontend = args.includes('--no-frontend')
-const combo = args.find((a) => !a.startsWith('--'))
-if (!(combo in combos)) {
-  console.error(
-    `用法：node scripts/package-win.mjs <${Object.keys(combos).join('|')}> [--zip-only] [--no-frontend]`
-  )
+// 严格校验：只接受 `win7-ia32` 与可选 `--zip-only`。已废弃的 64 位组合、以及跨架构打包时代才用得上的
+// 前端跳过开关都在这里退出 1，不会启动任何构建。
+const unknown = args.filter((a) => a !== 'win7-ia32' && a !== '--zip-only')
+if (unknown.length > 0 || !args.includes('win7-ia32')) {
+  console.error(`用法：node scripts/package-win.mjs win7-ia32 [--zip-only]` + (unknown.length > 0 ? `\n无法识别的参数：${unknown.join(' ')}` : ''))
   process.exit(1)
 }
-const cfg = combos[combo]
+const combo = 'win7-ia32'
+const cfg = CFG
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
 const releaseDir = join(root, 'release')
@@ -81,14 +74,11 @@ function run(cmd, args) {
 }
 
 // 1) 版本一致性（产物文件名内嵌版本号，两处不一致直接失败）
-// --no-frontend：dist-all.mjs 已统一跑过一次，避免两个进程同时改写同一批版本文件
-if (!noFrontend) {
-  execFileSync(process.execPath, [join(root, 'scripts', 'sync-version.mjs')], { cwd: root, stdio: 'inherit' })
-}
+execFileSync(process.execPath, [join(root, 'scripts', 'sync-version.mjs')], { cwd: root, stdio: 'inherit' })
 
 // 2) 类型检查。vite 不在这里跑：tauri 的 beforeBuildCommand（`npm run build:web`）会跑一次，
 //    原来的 `npm run build` 等于把渲染层白编两遍。
-if (!noFrontend) execSync('npm run typecheck', { cwd: root, stdio: 'inherit' })
+execSync('npm run typecheck', { cwd: root, stdio: 'inherit' })
 
 // 3) 运行时必须在位（缺了打出来的包在 Win7 起不来，宁可硬失败）
 {
@@ -108,17 +98,13 @@ if (!existsSync(tauriJs)) {
   process.exit(1)
 }
 const buildArgs = [tauriJs, 'build', '--target', cfg.triple]
-// 快速迭代：跳过 NSIS（solid 压缩是单组合最大的一块），只重建 exe + 绿色版 zip
+// 快速迭代：跳过 NSIS（solid 压缩是最大的一块），只重建 exe + 绿色版 zip
 buildArgs.push(...(zipOnly ? ['--no-bundle'] : ['--bundles', 'nsis']))
 buildArgs.push('--config', join(root, cfg.overlay))
-if (noFrontend) {
-  // dist-all.mjs 已统一构建过渲染层；置空钩子，免掉两个组合并发重写 dist/（cargo 编译期会读 frontendDist）
-  buildArgs.push('--config', '{"build":{"beforeBuildCommand":null}}')
-}
 run(process.execPath, buildArgs)
 
 if (!zipOnly) {
-  // 5) 定位 NSIS 产物 → release/<label>/mini-todo-setup-<ver>-<combo>.exe
+  // 5) 定位 NSIS 产物 → release/<label>/mini-todo-setup-<ver>-win7-ia32.exe
   const nsisDir = join(targetDir, 'bundle', 'nsis')
   const setup = existsSync(nsisDir)
     ? readdirSync(nsisDir)
@@ -162,7 +148,7 @@ execSync(
 )
 rmSync(staging, { recursive: true, force: true })
 
-// 7) 前置补丁（从 win7-patches/ 按架构筛含 6.1 的 .msu）；缺补丁源只提示不失败
+// 7) 前置补丁（从 win7-patches/ 取含 6.1 的 x86 .msu）；缺补丁源只提示不失败
 {
   const patchSrc = join(root, 'win7-patches')
   const patchDir = join(outDir, '前置补丁')

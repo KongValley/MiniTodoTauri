@@ -11,13 +11,13 @@ const label = process.argv[2] ?? 'current'
 const runs = Number(process.argv[3] ?? 3)
 const appExe =
   process.env.TODO_APP_EXE ||
-  join(root, 'src-tauri', 'target', 'x86_64-pc-windows-msvc', 'release', 'mini-todo.exe')
+  join(root, 'src-tauri', 'target', 'i686-pc-windows-msvc', 'release', 'mini-todo.exe')
 const tmpDir = join(root, 'tmp')
 const SIZES = [500, 2000, 5000]
 
 if (!existsSync(appExe)) {
   console.error(
-    `缺少应用二进制 ${appExe}\n先运行：npm run build && cargo build --release --locked --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`
+    `缺少应用二进制 ${appExe}\n先运行：npm run build && cargo build --release --locked --target i686-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`
   )
   process.exit(1)
 }

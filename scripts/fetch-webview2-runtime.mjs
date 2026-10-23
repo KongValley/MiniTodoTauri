@@ -1,7 +1,8 @@
 // 获取 WebView2 固定版 109 运行时（Win7 上受支持的最后一个版本）并展开：
-//   1) 优先用仓库根 webview2-109/ 中已有的 cab（Microsoft.WebView2.FixedVersionRuntime.*.<arch>.cab）
-//   2) 否则尝试 gh release download webview2-109（本仓库的一次性种子 Release）
-//   3) 校验 SHA256SUMS（若存在）后，用 expand.exe 展开到 webview2-runtime-x86/ 与 webview2-runtime-x64/
+//   1) 优先用 webview2-109/x86/ 里已展开好的目录内容
+//   2) 优先用仓库根 webview2-109/ 中已有的 x86 cab（Microsoft.WebView2.FixedVersionRuntime.*.x86.cab）
+//   3) 否则尝试 gh release download webview2-109（本仓库的一次性种子 Release）
+//   4) 校验 SHA256SUMS（若存在）后，用 expand.exe 展开到 webview2-runtime-x86/
 // 失败一律非零退出 —— 没有运行时的 Win7 包在机器上根本起不来，静默降级比构建失败危险得多。
 import { execFileSync } from 'node:child_process'
 import {
@@ -20,6 +21,9 @@ import { fileURLToPath } from 'node:url'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const cabDir = join(root, 'webview2-109')
+// 唯一架构：应用只出 32 位，包内也只需 x86 运行时
+const arch = 'x86'
+const runtimeDir = join(root, `webview2-runtime-${arch}`)
 const SYS = process.env.SystemRoot || 'C:\\Windows'
 // 必须用 System32 里的 bsdtar/expand 绝对路径：CI 的 PATH 里 Git 自带 GNU tar 在前，
 // 它会把 "D:\..." 当远程主机（tar: Cannot connect to D: resolve failed）。
@@ -125,12 +129,16 @@ function checkSums(file) {
   log(`SHA256 校验通过：${name}`)
 }
 
-for (const arch of ['x86', 'x64']) {
-  const outDir = join(root, arch === 'x86' ? 'webview2-runtime-x86' : 'webview2-runtime-x64')
-  if (existsSync(join(outDir, 'msedgewebview2.exe'))) {
-    log(`${outDir} 已就绪，跳过`)
-    continue
-  }
+// 兼容辅助：外部若把已解压好的目录放在 webview2-109/x86/，这里先搬一次。
+// 放在取压缩包之前：否则「取不到压缩包就退出」会让这目录永远用不上。
+const preExpanded = join(cabDir, arch)
+if (!existsSync(join(runtimeDir, 'msedgewebview2.exe')) && existsSync(join(preExpanded, 'msedgewebview2.exe'))) {
+  rmSync(runtimeDir, { recursive: true, force: true })
+  cpSync(preExpanded, runtimeDir, { recursive: true })
+  log(`已从 webview2-109/${arch}/ 复制到 ${runtimeDir}`)
+}
+
+if (!existsSync(join(runtimeDir, 'msedgewebview2.exe'))) {
   let archive = findCab(arch)
   if (!archive) {
     log(`本地没有 ${arch} 的运行时压缩包（.cab/.nupkg），尝试从种子 Release 下载 …`)
@@ -142,24 +150,14 @@ for (const arch of ['x86', 'x64']) {
       `取不到 WebView2 ${arch} 固定版运行时。三种获取方式任选：\n` +
         `  1) 从微软官网下载 Microsoft.WebView2.FixedVersionRuntime.109.*.${arch}.cab 放到 webview2-109/\n` +
         `  2) 运行 gh release download webview2-109 --pattern "*.${arch}*" --dir webview2-109\n` +
-        `  3) 从一台已装 WebView2 109 的机器复制运行时目录内容到 ${outDir}/\n` +
+        `  3) 从一台已装 WebView2 109 的机器复制运行时目录内容到 ${runtimeDir}/\n` +
         `（109 是 Win7 上最后一个受支持的 WebView2 版本）`
     )
     process.exit(1)
   }
   checkSums(archive)
-  log(`展开 ${archive} → ${outDir}`)
-  extractArchive(archive, outDir)
-}
-
-// 兼容辅助：外部若把解压好的目录放在 webview2-109/<arch>/，这里帮忙搬一次
-for (const arch of ['x86', 'x64']) {
-  const src = join(cabDir, arch)
-  const dst = join(root, arch === 'x86' ? 'webview2-runtime-x86' : 'webview2-runtime-x64')
-  if (existsSync(src) && !existsSync(join(dst, 'msedgewebview2.exe'))) {
-    cpSync(src, dst, { recursive: true })
-    log(`已从 webview2-109/${arch}/ 复制到 ${dst}`)
-  }
+  log(`展开 ${archive} → ${runtimeDir}`)
+  extractArchive(archive, runtimeDir)
 }
 
 // 修剪语言包：Chromium 按需加载 locale pak，缺了会回落 en-US；其余 82 个 pak 约 80MB，
@@ -180,5 +178,4 @@ function pruneLocales(outDir) {
   }
   if (removed) log(`${outDir}/Locales 移除 ${removed} 个语言包，省 ${(bytes / 1048576).toFixed(0)} MB`)
 }
-pruneLocales(join(root, 'webview2-runtime-x86'))
-pruneLocales(join(root, 'webview2-runtime-x64'))
+pruneLocales(runtimeDir)
