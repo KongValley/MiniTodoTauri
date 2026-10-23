@@ -107,9 +107,37 @@ const lastItem = [...tabMenu.querySelectorAll('button')].pop()
 lastItem.focus()
 await sleep(80)
 // 模拟 Tab 把焦点搬到浮层外(浏览器默认行为),再让浮层感知
-document.querySelector('[data-testid="search-toggle"]').focus()
+document.querySelector('[data-testid="search-input"]').focus()
 await sleep(250)
 eq(document.querySelector('[data-testid="card-menu"]'), null, '焦点离开浮层后自动收起')
 truthy(document.activeElement !== rowCheck, '收起时不把焦点拉回触发控件(用户已点到别处)')
 
+/* ---------- 从菜单转入弹窗:取消后焦点必须回到原来的任务控件 ---------- */
+// 旧实现关菜单时把焦点连同菜单按钮一起摘掉,useDialogFocus 只能抓到 body,
+// 取消后焦点就落到「新建」按钮 —— 这里要求它回到打开菜单的那一行
+rowCheck.focus()
+await sleep(120)
+rowEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 120 }))
+await sleep(250)
+document.querySelector('[data-menu="编辑"]').click()
+await sleep(300)
+truthy(document.querySelector('[data-testid="task-dialog"]'), '菜单「编辑」打开任务弹窗')
+document.querySelector('[data-testid="dlg-cancel"]').click()
+await sleep(300)
+eq(document.querySelector('[data-testid="task-dialog"]'), null, '取消后任务弹窗关闭')
+eq(document.activeElement, rowCheck, '菜单→编辑→取消后焦点回到原任务行')
+
+rowCheck.focus()
+await sleep(120)
+rowEl.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 120, clientY: 120 }))
+await sleep(250)
+document.querySelector('[data-menu="删除"]').click()
+await sleep(300)
+truthy(document.querySelector('[data-testid="confirm-dialog"]'), '菜单「删除」弹出确认框')
+document.querySelector('[data-testid="confirm-cancel"]').click()
+await sleep(300)
+eq(document.activeElement, rowCheck, '菜单→删除确认→取消后焦点回到原任务行')
+eq(t.getState().todos.find((x) => x.id === task.id).status, 0, '取消删除后任务仍在')
+
 return { rescheduled: d1, prio: 1, cornerRight: Math.round(window.innerWidth - cr.right) }
+

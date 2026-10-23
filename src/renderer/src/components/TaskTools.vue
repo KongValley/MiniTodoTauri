@@ -158,8 +158,8 @@ function toDetails(): void {
       >
         <Icon name="edit" :size="13" />详细编辑
       </button>
-      <span class="hint" data-testid="quick-preset">{{ presetHint }}</span>
     </div>
+    <span class="hint" data-testid="quick-preset">{{ presetHint }}</span>
 
     <div class="filters">
       <span class="flabel">优先级</span>
@@ -181,6 +181,7 @@ function toDetails(): void {
       <label class="flabel" for="filter-repeat">重复性</label>
       <select
         id="filter-repeat"
+        class="filter-select"
         data-testid="filter-repeat"
         :value="ui.taskFilter.repeat"
         @change="setRepeatFilter"
@@ -212,8 +213,8 @@ function toDetails(): void {
 .tools {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 8px 20px;
+  gap: 6px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
 }
@@ -222,13 +223,22 @@ function toDetails(): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  position: relative;
 }
 
 .quick-input {
   flex: 1 1 auto;
   min-width: 0;
-  height: 40px;
+  height: 32px;
+}
+
+/* 预设提示:一行小字,窄窗口时换行独占一行也不挤输入框 */
+.hint {
+  margin: -2px 0 0;
+  color: var(--text-mute);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .filters {
@@ -236,13 +246,27 @@ function toDetails(): void {
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  min-height: 36px;
-  font-size: 12px;
   color: var(--text-dim);
+  font-size: 12px;
 }
 
 .flabel {
   flex: 0 0 auto;
+}
+
+.filter-select {
+  height: 28px;
+}
+
+.spacer {
+  flex: 1 1 auto;
+  min-width: 8px;
+}
+
+.counts {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .seg {
@@ -254,9 +278,10 @@ function toDetails(): void {
 
 .seg-btn {
   min-height: 28px;
-  padding: 0 12px;
+  padding: 0 10px;
   color: var(--text);
   background: var(--card);
+  font-size: 12px;
 }
 
 .seg-btn + .seg-btn {
@@ -269,63 +294,14 @@ function toDetails(): void {
 
 .seg-btn.on {
   background: var(--accent);
-  color: var(--on-accent);
-}
-
-.counts {
-  font-variant-numeric: tabular-nums;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn.primary {
   border-color: var(--accent);
-  background: var(--accent);
   color: var(--on-accent);
 }
 
-.btn.primary:hover:not(:disabled) {
-  background: var(--accent);
-  box-shadow: var(--shadow-card);
-}
-
-.hint {
-  color: var(--text-dim);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-/* 视觉隐藏但保留给读屏的 label */
-.vh {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+/* 窄窗口:预设提示独占一行,输入框与按钮保持原宽 */
+@media (max-width: 1100px) {
+  .hint {
+    margin: 0;
+  }
 }
 </style>

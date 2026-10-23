@@ -19,13 +19,13 @@ function paint() {
   app.textContent = ''
   var box = document.createElement('div')
   box.style.cssText =
-    'margin:80px auto;max-width:520px;padding:24px;border:1px solid #e3e6ea;border-radius:8px;' +
-    'font:14px/1.7 "Microsoft YaHei",sans-serif;color:#2b2f36;background:#fff'
+    'margin:80px auto;max-width:520px;padding:20px;border:1px solid #ced8d1;border-radius:8px;' +
+    'font:14px/1.7 "Microsoft YaHei",sans-serif;color:#1f2b24;background:#ffffff'
   var head = document.createElement('b')
   head.style.cssText = 'font-size:15px'
   head.textContent = '界面加载失败'
   var desc = document.createElement('div')
-  desc.style.cssText = 'color:#5b6270;margin-top:8px'
+  desc.style.cssText = 'color:#52645a;margin-top:8px'
   desc.textContent =
     '数据没有丢失，但界面没能渲染出来。关闭应用后重新打开通常即可恢复；反复出现请把下面的信息反馈给维护者。'
   box.appendChild(head)
@@ -33,12 +33,12 @@ function paint() {
   if (bootError) {
     var detail = document.createElement('pre')
     detail.style.cssText =
-      'margin-top:12px;padding:8px;background:#f5f6f8;border-radius:6px;font-size:12px;white-space:pre-wrap'
+      'margin-top:12px;padding:8px;background:#e9eeeb;border-radius:6px;font-size:12px;white-space:pre-wrap'
     detail.textContent = bootError
     box.appendChild(detail)
   }
   var hint = document.createElement('div')
-  hint.style.cssText = 'color:#8b919c;margin-top:12px;font-size:12px'
+  hint.style.cssText = 'color:#56685c;margin-top:12px;font-size:12px'
   hint.textContent = '若应用刚从压缩包或更新目录运行，请先完整解压/更新完成再启动。'
   box.appendChild(hint)
   app.appendChild(box)

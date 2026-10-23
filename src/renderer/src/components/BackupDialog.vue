@@ -76,6 +76,7 @@ function openDir(): void {
         role="dialog"
         aria-labelledby="backup-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 640px"
       >
         <h2 id="backup-dialog-title">从备份恢复</h2>
         <p class="hint">
@@ -84,23 +85,26 @@ function openDir(): void {
           替换后当前数据可在底部提示里点「撤销」回退。
         </p>
 
-        <div class="list">
-          <p v-if="loaded && items.length === 0" class="empty" data-testid="backup-empty">
-            还没有备份：应用每天首次改动时写一份。
-          </p>
-          <div v-for="it in items" :key="it.path" class="item" :data-backup="it.name">
-            <span class="when">{{ stampLabel(it.mtimeMs) }}</span>
-            <span class="sum" :class="{ bad: !it.ok }">{{ summary(it) }}</span>
-            <span class="spacer" />
-            <button
-              class="btn"
-              data-testid="backup-restore"
-              :disabled="!it.ok"
-              :title="it.ok ? '导入这份备份' : `无法解析：${it.error ?? ''}`"
-              @click="restore(it)"
-            >
-              {{ it.ok ? '恢复' : '无法解析' }}
-            </button>
+        <!-- 备份行是唯一滚动区;备份多到装不下时 footer 仍然留在视野里 -->
+        <div class="dialog-body">
+          <div class="list">
+            <p v-if="loaded && items.length === 0" class="empty" data-testid="backup-empty">
+              还没有备份：应用每天首次改动时写一份。
+            </p>
+            <div v-for="it in items" :key="it.path" class="item" :data-backup="it.name">
+              <span class="when">{{ stampLabel(it.mtimeMs) }}</span>
+              <span class="sum" :class="{ bad: !it.ok }">{{ summary(it) }}</span>
+              <span class="spacer" />
+              <button
+                class="btn"
+                data-testid="backup-restore"
+                :disabled="!it.ok"
+                :title="it.ok ? '导入这份备份' : `无法解析：${it.error ?? ''}`"
+                @click="restore(it)"
+              >
+                {{ it.ok ? '恢复' : '无法解析' }}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -116,31 +120,13 @@ function openDir(): void {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  /* 105:低于 ConfirmDialog 的 110,"替换/合并"确认框不会被压在下面 */
   z-index: 105;
 }
 
-.dialog {
-  width: 560px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
 h2 {
-  margin: 0 0 12px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -153,9 +139,6 @@ h2 {
 }
 
 .list {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
 }
@@ -172,7 +155,8 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 10px;
+  min-height: 34px;
+  padding: 4px 10px;
   border-bottom: 1px solid var(--line);
   font-size: 12px;
 }
@@ -195,30 +179,5 @@ h2 {
 
 .spacer {
   flex: 1 1 auto;
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  margin-top: 12px;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-  color: var(--text);
-  font-size: 12px;
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 </style>

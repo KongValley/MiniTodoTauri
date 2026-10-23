@@ -54,14 +54,15 @@ eq(t.selection().length, 3, '重新 Ctrl+A 全选')
 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true }))
 await sleep(200)
 const search = document.querySelector('[data-testid="search-input"]')
-truthy(search, 'Ctrl+F 展开搜索框')
+truthy(search, '搜索框常驻在顶栏,Ctrl+F 直接聚焦')
 search.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }))
 await sleep(150)
 eq(t.selection().length, 3, '输入框内 Ctrl+A 不改变选择(仍保持之前的全选结果)')
 
-// Esc 收起搜索
+// Esc 清空查询,但搜索框常驻不消失(收起行为属于旧版已删除的交互)
 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 await sleep(150)
-eq(document.querySelector('[data-testid="search-input"]'), null, 'Esc 收起搜索框')
+truthy(document.querySelector('[data-testid="search-input"]'), 'Esc 后搜索框仍在(常驻)')
+eq(t.selection().length, 3, 'Esc 清搜索不影响列表选择')
 
 return { selected: t.selection().length }

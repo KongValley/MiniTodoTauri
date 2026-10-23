@@ -2,7 +2,7 @@
  * 全局快捷键。结构照 pdf编辑器 的 useGlobalKeymap:
  * onMounted 挂 window keydown,onBeforeUnmount 摘掉。
  */
-import { onBeforeUnmount, onMounted, nextTick } from 'vue'
+import { onBeforeUnmount, onMounted } from 'vue'
 import { addDays, today } from '@shared/dates'
 import type { ViewKey } from '@shared/types'
 import { reload, mutate, state, undoLast } from '../store/data'
@@ -125,25 +125,21 @@ export function useGlobalKeymap(): void {
     const dialog = hasOpenDialog()
     const popover = actionPopoverOpen()
 
-    // Ctrl+F:弹窗/浮层开着时不动作(否则焦点会被送到遮罩后面);已展开时也重新聚焦一次
+    // Ctrl+F:弹窗/浮层开着时不动作(否则焦点会被送到遮罩后面);搜索框常驻,聚焦即可
     if (ctrl && key === 'f') {
       if (dialog || popover) return
       event.preventDefault()
-      ui.searchOpen = true
-      void nextTick(() => document.querySelector<HTMLInputElement>('[data-testid="search-input"]')?.focus())
+      document.querySelector<HTMLInputElement>('[data-testid="search-input"]')?.focus()
       return
     }
 
     // Escape 从视觉最上层往下关(z-index:CardMenu 120 > Confirm 110 > dialog/settings/help 100)。
     // 浮层开着时整条 Esc 交给浮层自己(它会把焦点还给触发控件)——见 CardMenu/BulkMenu 的 window 监听。
-    // 弹窗由 dialog-focus 统一认顶层;这里只剩搜索框要收。
+    // 弹窗由 dialog-focus 统一认顶层;都关完了才轮到清空搜索词。
     if (event.key === 'Escape') {
       if (actionPopoverOpen()) return
       if (closeTopDialog()) return
-      if (ui.searchOpen) {
-        ui.searchOpen = false
-        ui.search = ''
-      }
+      if (ui.search !== '') ui.search = ''
       return
     }
 

@@ -39,8 +39,8 @@
 | `B` | 切换看板 / 列表 |
 | `Ctrl+1` / `Ctrl+2` | 菜单「视图 → 看板 / 列表」 |
 | `Ctrl+A` | 列表视图全选当前视图（输入框内仍是原生全选文本） |
-| `Ctrl+F` | 搜索 |
-| `Esc` | 收起最上面一层：右键/批量浮层 → 弹窗 → 搜索框（弹窗关闭后焦点回到打开它的控件） |
+| `Ctrl+F` | 聚焦搜索框（常驻，不需要先展开） |
+| `Esc` | 收起最上面一层：右键/批量浮层 → 弹窗 → 清空搜索词（弹窗关闭后焦点回到打开它的控件） |
 | `F5` | 刷新 |
 | `1` `2` `3` `4` | 今天 / 明天 / 最近7天 / 所有 |
 | 看板内滚轮 | 上下滚动鼠标所在列 |
@@ -49,11 +49,13 @@
 
 ## 界面
 
-视觉是「柔和卡片」一套：浅/深两套语义色 token、卡片 14px 圆角 + 轻阴影、弹窗 18px 圆角、焦点一律 2px 高对比描边；低配机器自动关掉卡片阴影（`html[data-perf='low']`），边线与文字仍在。
+视觉是「紧凑效率型」一套：中性灰绿表面 + 墨绿主操作、细分隔线、小圆角，浅/深两套语义色 token，去掉了逐卡片阴影（老机器上唯一的按项重复合成开销）。控件统一 32px 高、焦点一律 2px 高对比描边。
 
-左侧是视图与清单（分组 → 清单两层，每行右侧显示条数，视图行配彩色图标）；「清单」标题右侧有「+ 分组」「+ 清单」两个入口，分组与清单行鼠标移上去会出现重命名与删除图标，两行之间可拖拽调整顺序（清单可拖到别的分组下）。顶栏是视图名、搜索、新建、视图切换、设置、快捷键；其下是工具区：第一行就地快捷录入（右边小字是当前日期/清单预设），第二行是两维筛选与「显示 X / Y 项」。底部状态栏是「数据目录」按钮（点开数据文件所在目录）、全局搜索计数、今天待办数、稍后提醒与保存失败提示。
+左侧是「任务 / 我的清单 / 归档」三段：任务段是 5 个内置视图，清单段是分组 → 清单两层（可拖拽排序、跨组拖动），归档段是已完成/已放弃/回收站。只有清单树会滚动，视图与底部的「设置」「快捷键」始终可见。顶栏是视图名、**常显搜索框**、看板/列表双按钮与「新建」——两个视图按钮用 `aria-pressed` 标出当前项，点当前视图不会清空选择或草稿。工具区第一行是就地快捷录入（下面一行小字是当前日期/清单预设），第二行是两维筛选与「显示 X / Y 项」。底部状态栏是「数据目录」、全局搜索计数、今天待办数、稍后提醒与保存失败提示。
 
-弹窗有统一的键盘语义：打开后焦点落在第一个该填/该看的位置，`Tab` 只在最上层弹窗里循环（被压住的层会 `inert`），`Esc` 只关最上面那一层，关闭后焦点回到当初打开它的控件；弹窗开着时快捷键不会穿透到背后的列表。
+看板每列 300px，卡片 8px 圆角 + 1px 边线，标题最多两行，元信息（清单/子任务/重复/优先级/逾期）在次级行。列表是紧凑表格：40px 行高，六列（选择 / 任务 / 日期 / 清单 / 优先级 / 备注），窗口窄于 1100px 时自动收掉备注列。
+
+弹窗是统一外壳：标题与底部按钮固定，中间只有一块滚动区；`Tab` 只在最上层弹窗里循环（被压住的层会 `inert`），`Esc` 只关最上面那一层，关闭后焦点回到当初打开它的控件；弹窗开着时快捷键不会穿透到背后的列表。纯文本滚动区（帮助、确认说明）显式可聚焦，键盘能直接滚。
 
 窗口用系统原生标题栏，带常显的菜单栏（旧 Electron 版是 Alt 才显示）。**关闭窗口 = 隐藏到托盘**（托盘常驻），真正退出走「文件 → 退出」或右键托盘图标 →「退出」。应用已在后台运行时**再次双击 exe 会把窗口唤到最前**（单实例锁，不会开出第二个实例）。
 
@@ -118,10 +120,10 @@
 npm install          # 前端依赖（vite/vue/vue-tsc/@tauri-apps/cli）
 npm run dev          # 开发模式（tauri dev，热更新）
 npm run build        # 类型检查 + 构建渲染层到 dist/
-npm test             # 共享层纯函数自检（node --test，55 项）
+npm test             # 共享层纯函数自检（node --test，62 项）
 npm run fixtures     # 生成 normalize fixture（Rust 对照用，提交入库）
 npm run test:rust    # Rust 宿主单测（normalize 对照 / 数据 IO / 通知规则等，8 项）
-npm run smoke        # 端到端冒烟（真窗口 39 项：托盘、通知、单实例、崩溃自愈、保存失败注入、备份恢复、导出字节）
+npm run smoke        # 端到端冒烟（真窗口 42 项：托盘、通知、单实例、崩溃自愈、保存失败注入、备份恢复、导出字节）
 npm run icon         # 重新生成图标（resources/icon.png → src-tauri/icons/）
 ```
 
@@ -180,7 +182,7 @@ TODO_SMOKE=1 TODO_SMOKE_SCRIPT=scripts/perf-audit-probe.js \
 关键设计（改这些地方时注意别退回去）：
 
 - **启动即显示**：窗口 `visible: false` 只在 `setup` 里 `show_window()` 后可见（不再等首个 `PageLoadEvent::Finished`），HTML 里带一屏「迷你待办 / 正在启动…」骨架屏（Vue 挂载时自动清掉）。老机器上 WebView2 内核初始化 + 冷盘读入是秒级，先出窗口再填内容，避免「双击没反应」的观感
-- **自动低配模式**：`main.ts` 按 `hardwareConcurrency ≤ 2` / `deviceMemory ≤ 4` / UA 含 `Windows NT 6.1`（Win7）任一命中 → `html[data-perf=low]`，只关掉逐卡片 `box-shadow`（唯一按项重复的合成开销），卡片仍有 1px 边线
+- **不再有逐卡片阴影**：紧凑版把卡片阴影彻底去掉（`--shadow-card: none`），老机器上唯一的按项重复合成开销就此消失，`html[data-perf=low]` 那套按硬件关阴影的分支也一并删除。`main.ts` 不再写 `data-perf`
 - `state.store` 用 `markRaw` 包住 —— 派生数据统一由 `store/index.ts` 的 `index` computed 提供，不依赖字段级追踪
 - 视图计数/看板列走 `shared/store-index.ts` 的**单次扫描索引**，不是逐视图扫描。**但看板列要走 `query.ts` 的 `columnsForView()`** —— `index.columns` 是全量扫描的结果，直接喂看板会在「今天」视图下仍列出未来日期的列
 - 看板卡片与列表行都是**窗口化渲染**（`lib/virtual.ts`），只渲染可视区
@@ -224,6 +226,12 @@ powershell -NoProfile -Command "$c=Get-Counter '\Process(mini-todo*)\Working Set
 
 文件超过 64 KiB 自动保留最后 100 行；只写本地数据目录，内容不含绝对路径。排查「启动慢 / 内存吃紧 / 界面变白」时就近取证（release 无控制台，`eprintln!` 全部丢弃，这里是唯一证据来源）。
 
+### 界面截图（不抢前台）
+
+设 `TODO_SMOKE_SHOT_DIR=<目录>` 启动真实窗口，会依次切看板/列表、浅色/深色并打开编辑器，各截一张 PNG（`01-board-light` … `05-dialog`）。
+
+截图走 WebView2 的 CDP `Page.captureScreenshot`，**不会把窗口 show/set_focus 到前台**——跑测试时不会打断你正在做的事。早期实现用 PowerShell `CopyFromScreen` 拷屏幕像素，只能抓屏幕上真实可见的内容，因此必须抢前台；而 `PrintWindow` 对 WebView2 的合成渲染只会得到空白，没有第三条路。CDP 直接向渲染层要一帧，与窗口是否可见/在前台无关。
+
 ## 图标
 
 全部手绘内联 SVG，**不引图标库**。`Icon.vue` 里两张表：
@@ -233,8 +241,9 @@ powershell -NoProfile -Command "$c=Get-Counter '\Process(mini-todo*)\Working Set
 | `PART` | 多部件实心（主体 + 阴影 + 镂空） | 每件自带 `var(--ico-*)` | 侧栏 8 个视图、顶栏按钮、右键菜单 |
 | `STROKE` / `FILL` | 单色描边 / 实心 | `currentColor`，跟随所在行文字色 | 卡片内的搜索、勾、加号、优先级旗标 |
 
-- 配色 9 组 token，浅色/深色各一套；镂空细节用 `var(--card)`，深色下自动翻成内凹
+- 配色 7 组 token（blue/cyan/amber/green/red/gray/violet，各带 `-2` 阴影层）+ 1 个 `--ico-cut` 镂空色，浅色/深色各一套；实心 accent 面（`新建` 按钮、看板/列表按下态）上的图标自动反白
 - 组件里禁止硬编码色值，一律走 `var(--*)`
+- 改色值时用 WCAG 相对亮度公式核对：任何图标主色对其可能出现的底色不得低于 3:1
 - 改 `PART` 时注意：**笔画形（勾/叉/箭头）必须给 `s`（描边宽度）走描边渲染**。这类路径直接 `fill` 是零面积的，画出来什么都没有
 - `STROKE` 每项必须是**一条完整**的 `d`（数组元素）。别把多条子路径拼成一个字符串再按空格拆 —— 路径里的空格是参数分隔符，拆出来的是语法非法的碎片，`<svg>` 元素在但一个像素都不画
 
@@ -247,9 +256,9 @@ src/shared/store-index.ts 单次扫描索引（视图计数 + 全量看板列 + 
 src/shared/query.ts       排序、分桶、查表与 columnsForView（看板列按视图过滤后的分桶）
 src/shared/store-ops.ts   数据变更纯函数（不可变，含分组/清单增删改排序）+ normalizeStore 唯一信任边界
 src/shared/api.ts         IPC 通道名契约（渲染层原样沿用）
-src/shared/store-ops.test.ts  纯函数与索引自检（node --test，43 项）
+src/shared/store-ops.test.ts  纯函数与索引自检（node --test，62 项）
 
-src/renderer/**           界面（与 Electron 版一致；仅新增/改动了桥接层 4 个文件）
+src/renderer/**           界面（紧凑效率型已全面重写；桥接层沿用，test-api 是冒烟/性能脚本入口）
 src/renderer/src/lib/todo-api.ts  window.todoAPI → Tauri invoke/event 的桥接（替代 preload）
 src/renderer/src/test-api.ts      window.__todoTest（冒烟/性能脚本入口，新增 ready() 就绪闸门）
 
@@ -266,8 +275,8 @@ src-tauri/src/smoke.rs    冒烟框架（脚本注入 + mainChecks + 进程指�
 src-tauri/src/metrics.rs  进程树内存/进程数（windows-sys）
 src-tauri/src/tests.rs    宿主单测（fixture 对照 / IO 规则 / 通知真值表等）
 
-scripts/run-smokes.mjs    冒烟运行器（39 步，主进程断言表 + 导出文件的字节断言）
-scripts/smoke/step*.js    各步断言（与 Electron 版同一套，仅 step15 一处适配 WebView2）
+scripts/run-smokes.mjs    冒烟运行器（42 步，主进程断言表 + 导出文件的字节断言）
+scripts/smoke/step*.js    各步断言；step42 覆盖紧凑版 UI（双视图按钮 / 常显搜索 / 侧栏入口）
 scripts/package-win.mjs   单架构打包（tauri build + NSIS + 绿色版 zip + 补丁分发）
 scripts/fetch-webview2-runtime.mjs  WebView2 109 运行时获取与展开
 scripts/sync-version.mjs  package.json ↔ tauri.conf.json 版本同步

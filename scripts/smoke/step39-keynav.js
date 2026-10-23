@@ -82,14 +82,18 @@ truthy(
   `选中行应完整落在滚动容器可视区内(行 ${rowRect.top.toFixed(1)}..${rowRect.bottom.toFixed(1)} / 容器 ${boxRect.top.toFixed(1)}..${boxRect.bottom.toFixed(1)})`
 )
 
-// 5) 看板 ←→ 滚一列(列宽 300)
+// 5) 看板 ←→ 滚一列(按实际列宽,不钉死像素)
 t.setBoard(true)
 await sleep(300)
 const cols = document.querySelector('[data-testid="board-columns"]')
 const before = cols.scrollLeft
+const firstColumnEl = document.querySelector('[data-column]')
+truthy(firstColumnEl, '至少渲染出一列,才能量出列宽')
+const colWidth = firstColumnEl.getBoundingClientRect().width
+truthy(colWidth > 0, `列宽可测(实际 ${colWidth})`)
 key('ArrowRight')
 await sleep(200)
-eq(cols.scrollLeft, before + 300, '→ 右移一列')
+eq(cols.scrollLeft, before + colWidth, '→ 右移一列')
 key('ArrowLeft')
 await sleep(200)
 eq(cols.scrollLeft, before, '← 回到原位')

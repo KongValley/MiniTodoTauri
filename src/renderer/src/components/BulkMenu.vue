@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
   top: calc(100% + 4px);
   right: 8px;
   z-index: 120;
-  min-width: 184px;
+  min-width: 224px;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   padding: 6px;

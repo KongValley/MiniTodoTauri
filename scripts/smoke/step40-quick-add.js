@@ -272,7 +272,10 @@ truthy(
 // 弹窗开着时:Ctrl+F / B / N / F5 都不作用于背景
 window.dispatchEvent(new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true }))
 await sleep(150)
-eq(q('[data-testid="search-input"]'), null, '弹窗开着时 Ctrl+F 不展开搜索')
+truthy(
+  q('[data-testid="task-dialog"]').contains(document.activeElement),
+  `弹窗开着时 Ctrl+F 焦点不离开弹窗(实际 ${document.activeElement.dataset.testid})`
+)
 const boardBefore = t.board()
 key('b')
 await sleep(120)

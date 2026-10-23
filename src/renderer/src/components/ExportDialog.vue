@@ -91,6 +91,7 @@ async function exportAs(format: 'md' | 'csv'): Promise<void> {
         role="dialog"
         aria-labelledby="export-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 480px"
       >
         <h2 id="export-dialog-title">导出为文本</h2>
 
@@ -125,31 +126,13 @@ async function exportAs(format: 'md' | 'csv'): Promise<void> {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* 105:低于 ConfirmDialog 的 110 */
+  /* 105:低于 ConfirmDialog 的 110,"替换/合并"确认框不会被压在下面 */
   z-index: 105;
 }
 
-.dialog {
-  width: 460px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
 h2 {
-  margin: 0 0 16px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -167,41 +150,13 @@ h2 {
 
 .field select {
   width: 100%;
+  min-height: 32px;
 }
 
 .hint {
-  margin: 0 0 12px;
+  margin: 0;
   color: var(--text-dim);
   font-size: 12px;
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-  color: var(--text);
-  font-size: 12px;
-}
-
-.btn:hover {
-  background: var(--hover);
-}
-
-.btn.primary {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-accent);
+  font-variant-numeric: tabular-nums;
 }
 </style>

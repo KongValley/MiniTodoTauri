@@ -59,41 +59,45 @@ function openDataDir(): void {
         role="dialog"
         aria-labelledby="settings-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 480px"
       >
         <h2 id="settings-dialog-title">设置</h2>
 
-        <section class="block">
-          <div class="lbl">主题</div>
-          <div class="seg">
-            <button
-              v-for="t in THEMES"
-              :key="t.value"
-              class="seg-btn"
-              :class="{ active: theme === t.value }"
-              :data-theme-opt="t.value"
-              @click="onTheme(t.value)"
-            >
-              {{ t.label }}
-            </button>
-          </div>
-        </section>
+        <div class="dialog-body">
+          <section class="block">
+            <div class="lbl">主题</div>
+            <div class="seg" role="group" aria-label="主题">
+              <button
+                v-for="t in THEMES"
+                :key="t.value"
+                class="seg-btn"
+                :class="{ active: theme === t.value }"
+                :aria-pressed="theme === t.value"
+                :data-theme-opt="t.value"
+                @click="onTheme(t.value)"
+              >
+                {{ t.label }}
+              </button>
+            </div>
+          </section>
 
-        <section class="block">
-          <div class="lbl">到期提醒</div>
-          <label class="inline">
-            <input type="checkbox" data-testid="notify-toggle" :checked="notifyEnabled" @change="onNotifyToggle" />
-            <span>每天到点提醒未完成任务</span>
-          </label>
-          <label class="inline">
-            <span class="dim">提醒时间</span>
-            <input type="time" data-testid="notify-at" :value="notifyAt" :disabled="!notifyEnabled" @change="onNotifyAt" />
-          </label>
-        </section>
+          <section class="block">
+            <div class="lbl">到期提醒</div>
+            <label class="inline">
+              <input type="checkbox" data-testid="notify-toggle" :checked="notifyEnabled" @change="onNotifyToggle" />
+              <span>每天到点提醒未完成任务</span>
+            </label>
+            <label class="inline">
+              <span class="dim">提醒时间</span>
+              <input type="time" data-testid="notify-at" :value="notifyAt" :disabled="!notifyEnabled" @change="onNotifyAt" />
+            </label>
+          </section>
 
-        <section class="block">
-          <div class="lbl">数据</div>
-          <button class="btn" @click="openDataDir">打开数据目录</button>
-        </section>
+          <section class="block">
+            <div class="lbl">数据</div>
+            <button class="btn" @click="openDataDir">打开数据目录</button>
+          </section>
+        </div>
 
         <div class="foot">
           <span class="dim">迷你待办 {{ version }}</span>
@@ -107,30 +111,12 @@ function openDataDir(): void {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 100;
 }
 
-.dialog {
-  width: 420px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
 h2 {
-  margin: 0 0 16px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -146,7 +132,6 @@ h2 {
 
 .seg {
   display: flex;
-  gap: 0;
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
   overflow: hidden;
@@ -154,7 +139,7 @@ h2 {
 
 .seg-btn {
   flex: 1 1 0;
-  min-height: 36px;
+  min-height: 32px;
   color: var(--text);
 }
 
@@ -164,6 +149,7 @@ h2 {
 
 .seg-btn.active {
   background: var(--accent);
+  border-color: var(--accent);
   color: var(--on-accent);
 }
 
@@ -171,32 +157,10 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  min-height: 32px;
 }
 
 .dim {
   color: var(--text-dim);
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-}
-
-.btn:hover {
-  background: var(--hover);
 }
 </style>

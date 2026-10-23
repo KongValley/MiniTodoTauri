@@ -38,9 +38,12 @@ function onSecondary(): void {
         role="dialog"
         aria-labelledby="confirm-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 440px"
       >
         <h2 id="confirm-dialog-title">{{ ui.confirm?.title }}</h2>
-        <p>{{ ui.confirm?.detail }}</p>
+        <div class="dialog-body" tabindex="0" role="region" aria-label="确认说明">
+          <p>{{ ui.confirm?.detail }}</p>
+        </div>
         <div class="foot">
           <span class="spacer" />
           <button class="btn" data-testid="confirm-cancel" @click="cancel">取消</button>
@@ -56,63 +59,19 @@ function onSecondary(): void {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 110;
 }
 
-.dialog {
-  width: 420px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
 h2 {
-  margin: 0 0 10px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
 p {
-  margin: 0 0 20px;
+  margin: 0;
   color: var(--text-dim);
-  line-height: 1.6;
   white-space: pre-line;
 }
-
-.foot {
-  display: flex;
-  gap: 8px;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-}
-
-.btn:hover {
-  background: var(--hover);
-}
-
-.btn.danger {
-  color: var(--danger);
-  border-color: var(--danger);
-}
 </style>
+

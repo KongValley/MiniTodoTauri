@@ -336,7 +336,9 @@ function onClearDropped(): void {
     </div>
 
     <div class="head">
-      <label class="cell check"><input type="checkbox" :checked="allSelected" @change="toggleAll" /></label>
+      <label class="cell check">
+        <input type="checkbox" aria-label="全选当前视图任务" :checked="allSelected" @change="toggleAll" />
+      </label>
       <span class="cell title">任务</span>
       <button class="cell hbtn date" data-sort="date" @click="cycleSort('date')">
         日期<Icon v-if="ui.listSort?.key === 'date'" :name="ui.listSort.desc ? 'collapse' : 'expand'" :size="10" />
@@ -379,7 +381,12 @@ function onClearDropped(): void {
             @contextmenu.prevent="onRowCtx($event, v.item.item)"
           >
             <span class="cell check" @click.stop="onRowCheck($event, v.item.item)">
-              <input type="checkbox" :checked="selectedIds.has(v.item.item.id)" @click.stop="onRowCheck($event, v.item.item)" />
+              <input
+                type="checkbox"
+                :aria-label="`选择任务：${v.item.item.title}`"
+                :checked="selectedIds.has(v.item.item.id)"
+                @click.stop="onRowCheck($event, v.item.item)"
+              />
             </span>
             <span class="cell title">
               <button
@@ -390,7 +397,7 @@ function onClearDropped(): void {
               >
                 <Icon v-if="v.item.item.status === 1" name="check" :size="10" />
               </button>
-              <span class="ttext">
+              <span class="ttext" :title="v.item.item.title">
                 <span v-for="(s, i) in segments(v.item.item.title, ui.search)" :key="i" :class="{ hl: s.hit }">{{ s.t }}</span>
               </span>
               <span v-if="v.item.item.subtasks.length > 0" class="subs">
@@ -401,16 +408,23 @@ function onClearDropped(): void {
               </span>
             </span>
             <span class="cell date">
-              <template v-if="ui.view === 'done'">{{ v.item.item.doneAt ? stampLabel(v.item.item.doneAt) : '—' }}</template>
-              <template v-else>
-                {{ label(v.item.item.date) }}<span v-if="odOf(v.item.item) > 0" class="overdue" data-overdue>逾期 {{ odOf(v.item.item) }} 天</span>
-              </template>
+              <span class="stack">
+                <template v-if="ui.view === 'done'">{{ v.item.item.doneAt ? stampLabel(v.item.item.doneAt) : '—' }}</template>
+                <template v-else>{{ label(v.item.item.date) }}</template>
+                <span v-if="ui.view !== 'done' && odOf(v.item.item) > 0" class="overdue" data-overdue>
+                  逾期 {{ odOf(v.item.item) }} 天
+                </span>
+              </span>
             </span>
-            <span class="cell lname"><i class="dot" :style="{ background: colorOf(v.item.item) }" />{{ nameOf(v.item.item) }}</span>
+            <span class="cell lname" :title="nameOf(v.item.item)">
+              <i class="dot" :style="{ background: colorOf(v.item.item) }" />{{ nameOf(v.item.item) }}
+            </span>
             <span class="cell prio" :class="`p${v.item.item.prio}`">
               <i class="pi"><Icon :name="prioIcon(v.item.item.prio)" :size="12" /></i>{{ PRIO_NAME[v.item.item.prio] }}
             </span>
-            <span class="cell note">{{ v.item.item.status !== 0 ? STATUS_NAME[v.item.item.status] : v.item.item.note }}</span>
+            <span class="cell note" :title="v.item.item.status !== 0 ? STATUS_NAME[v.item.item.status] : v.item.item.note">
+              {{ v.item.item.status !== 0 ? STATUS_NAME[v.item.item.status] : v.item.item.note }}
+            </span>
           </div>
         </div>
         <div :style="{ height: `${virtual.state.value.padBottom}px` }" />
@@ -426,7 +440,7 @@ function onClearDropped(): void {
   height: 100%;
   min-height: 0;
   /* 列宽随窗口收放:窄窗口(最小 900px)下线 table 收掉「备注」列 */
-  --list-cols: 32px minmax(0, 2fr) 132px 104px 76px minmax(0, 1fr);
+  --list-cols: 28px minmax(0, 2fr) 136px 108px 72px minmax(0, 1fr);
 }
 
 .toolbar {
@@ -434,9 +448,9 @@ function onClearDropped(): void {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
-  min-height: 44px;
-  padding: 6px 16px;
+  gap: 10px;
+  min-height: 36px;
+  padding: 4px 12px;
   border-bottom: 1px solid var(--line);
   color: var(--text-dim);
   font-size: 12px;
@@ -451,19 +465,13 @@ function onClearDropped(): void {
 }
 
 .btn {
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--field-line);
-  background: var(--card);
+  padding: 0 10px;
+  min-height: 28px;
+  font-size: 12px;
 }
 
 .btn:hover:not(:disabled) {
   background: var(--hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
 }
 
 .btn.danger:hover:not(:disabled) {
@@ -477,11 +485,11 @@ function onClearDropped(): void {
   grid-template-columns: var(--list-cols);
   align-items: center;
   gap: 8px;
-  padding: 0 16px;
+  padding: 0 12px;
 }
 
 .head {
-  height: 36px;
+  height: 32px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   color: var(--text-dim);
@@ -511,7 +519,7 @@ function onClearDropped(): void {
 }
 
 .empty {
-  padding: 40px 0;
+  padding: 32px 0;
   text-align: center;
   color: var(--text-mute);
 }
@@ -532,13 +540,12 @@ function onClearDropped(): void {
   display: flex;
   align-items: center;
   height: var(--list-row-height);
-  padding: 6px 16px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 600;
-  line-height: 20px;
 }
 
 .rows {
@@ -557,14 +564,29 @@ function onClearDropped(): void {
   background: var(--hover);
 }
 
+/* 选中行:整行底色 + 左边线,与侧栏当前视图同一套语言 */
 .row.selected {
   background: var(--accent-soft);
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .cell {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 日期 + 逾期分两行:横向截断会把「逾期 N 天」切掉,那是最该看见的信息 */
+.stack {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.stack .overdue {
+  margin-left: 0;
+  font-size: 11px;
 }
 
 .title {
@@ -647,7 +669,7 @@ function onClearDropped(): void {
 /* 窄窗口(最小 900px):收掉备注列,主列改成 1fr,行内不再横向挤压 */
 @media (max-width: 1100px) {
   .list {
-    --list-cols: 32px minmax(0, 1fr) 132px 100px 68px;
+    --list-cols: 28px minmax(0, 1fr) 132px 96px 64px;
   }
 
   .note {

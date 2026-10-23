@@ -1,102 +1,107 @@
-/* 调色板:键名对齐旧版 Theme.cs 的语义色,外加「柔和卡片」新增的形状/层级 token。
-   组件样式一律用 var(--*),禁止硬编码十六进制(清单自定义颜色来自数据,不在此列)。 */
+/* 调色板:中性灰绿表面 + 墨绿主操作,面向高频操作的紧凑工作台。
+   键名与语义与旧版 Theme.cs 对齐;组件样式一律用 var(--*),禁止硬编码十六进制
+   (清单自定义颜色来自数据,不在此列)。 */
 :root {
-  --bg: #f5f6fa;
-  --panel: #eef1f6;
+  --bg: #f4f6f5;
+  --panel: #e9eeeb;
   --card: #ffffff;
-  --hover: #e9edf5;
-  --sel: #e8edff;
-  --line: #dde3ec;
-  --text: #252c3a;
-  --text-dim: #596579;
-  --text-mute: #606c80;
-  --accent: #4864c0;
-  --accent-soft: #e8edff;
+  --hover: #e3ebe6;
+  --accent-soft: #dceee4;
+  --sel: #dceee4;
+  --line: #ced8d1;
+  --text: #1f2b24;
+  --text-dim: #52645a;
+  --text-mute: #56685c;
+  --accent: #216949;
   --on-accent: #ffffff;
-  --field: #fafbfe;
-  --field-line: #7b899e;
-  --status: #f5f6fa;
-  --track: #eceff3;
-  --thumb: #b6bec9;
-  --thumb-hot: #8b95a3;
-  --prio-1: #b74746;
-  --prio-2: #8d681b;
-  --prio-3: #347152;
+  --field: #ffffff;
+  --field-line: #7c8c81;
+  --status: var(--card);
+  --track: #e9eeeb;
+  --thumb: #a6b5ab;
+  --thumb-hot: #7c8c81;
+  --prio-1: #b2343d;
+  --prio-2: #805c16;
+  --prio-3: #216949;
   /* 优先级软背景:卡片/标记的底,不与文字抢对比 */
-  --prio-1-soft: #faecea;
-  --prio-2-soft: #faf1d9;
-  --prio-3-soft: #e9f4ed;
-  --danger: #b74746;
-  /* 形状三档:控件 / 卡片 / 弹窗 */
-  --radius-control: 8px;
-  --radius-card: 14px;
-  --radius-dialog: 18px;
-  /* 层级两档:卡片常态、浮层(菜单/弹窗/提示) */
-  --shadow-card: 0 2px 8px rgb(31 45 75 / 6%);
-  --shadow-popover: 0 16px 48px rgb(31 45 75 / 16%);
-  --overlay: rgb(25 35 55 / 28%);
-  /* 图标双色:ico-* 为主色,ico-*-2 为阴影/次级色。SVG 图标不描边,靠这两层出体积感 */
-  --ico-blue: #2f6fe4;
-  --ico-blue-2: #1c4bb0;
-  --ico-cyan: #0f8f80;
-  --ico-cyan-2: #0a6f63;
-  --ico-amber: #e08c1f;
-  --ico-amber-2: #b96f14;
-  --ico-green: #3c9954;
-  --ico-green-2: #2c7a41;
-  --ico-red: #d34a3e;
-  --ico-red-2: #ad362c;
-  --ico-gray: #5d6673;
-  --ico-gray-2: #464e59;
-  --ico-violet: #6b53c4;
-  --ico-violet-2: #54409f;
+  --prio-1-soft: #f8e7e9;
+  --prio-2-soft: #f5edda;
+  --prio-3-soft: #dceee4;
+  --danger: #b2343d;
+  /* 形状两档:控件 / 卡片 / 弹窗 */
+  --radius-control: 6px;
+  --radius-card: 8px;
+  --radius-dialog: 12px;
+  /* 层级两档:浮层(菜单/弹窗/提示)。逐卡片阴影取消 —— 老机器上唯一的按项重复合成开销 */
+  --shadow-card: none;
+  --shadow-popover: 0 12px 32px rgb(15 30 21 / 18%);
+  --overlay: rgb(15 30 21 / 28%);
+  /* 图标双色:ico-* 为主色,ico-*-2 为阴影/次级色。SVG 图标不描边,靠这两层出体积感。
+     色相分工刻意避开界面主色(墨绿),只有「已完成」用绿,其余蓝/青/琥珀/红/灰/紫各占一槽。
+     改色值时必须按 WCAG 相对亮度公式核对:图标主色对其可能出现的底色不低于 3:1 */
+  --ico-blue: #2b62a0;
+  --ico-blue-2: #1f4a7c;
+  --ico-cyan: #0b7480;
+  --ico-cyan-2: #08545d;
+  --ico-amber: #a06a12;
+  --ico-amber-2: #774e0b;
+  --ico-green: #2f7a3a;
+  --ico-green-2: #235c2c;
+  --ico-red: #c23c2e;
+  --ico-red-2: #952b20;
+  --ico-gray: #6e7c85;
+  --ico-gray-2: #525e66;
+  --ico-violet: #6b4fbe;
+  --ico-violet-2: #4d378f;
+  /* 镂空色:图标内部的反白挖空(如勾、叉、加号),跟随所在面而非卡片 */
+  --ico-cut: var(--card);
   color-scheme: light;
 }
 
 [data-theme='dark'] {
-  --bg: #171b24;
-  --panel: #1d2330;
-  --card: #252c3a;
-  --hover: #30394a;
-  --sel: #333f59;
-  --line: #394457;
-  --text: #eef2fa;
-  --text-dim: #b1bfd4;
-  --text-mute: #9aaac2;
-  --accent: #9fb4ff;
-  --accent-soft: #333f59;
-  --on-accent: #172040;
-  --field: #202735;
-  --field-line: #687993;
-  --status: #1d2330;
-  --track: #222a33;
-  --thumb: #414b57;
-  --thumb-hot: #5a6673;
-  --prio-1: #f3a7a0;
-  --prio-2: #e8c27c;
-  --prio-3: #8eceaa;
-  --prio-1-soft: #453236;
-  --prio-2-soft: #403b2d;
-  --prio-3-soft: #2c4038;
-  --danger: #f3a7a0;
-  --shadow-card: 0 2px 8px rgb(0 0 0 / 12%);
-  --shadow-popover: 0 16px 48px rgb(0 0 0 / 32%);
-  --overlay: rgb(4 8 16 / 55%);
-  /* 图标双色:深色下整体提亮,次级色也要跟上,否则阴影层会糊成一片 */
-  --ico-blue: #6d9df5;
-  --ico-blue-2: #4f7fd8;
-  --ico-cyan: #3fbfae;
-  --ico-cyan-2: #2c9b8c;
-  --ico-amber: #f0b45a;
-  --ico-amber-2: #c98f3d;
-  --ico-green: #5cbc7f;
-  --ico-green-2: #42955e;
-  --ico-red: #e8705f;
-  --ico-red-2: #c45546;
-  --ico-gray: #98a2af;
-  --ico-gray-2: #737e8b;
-  --ico-violet: #a48fe8;
-  --ico-violet-2: #8570cd;
+  --bg: #151a18;
+  --panel: #1b2320;
+  --card: #202a26;
+  --hover: #2b3731;
+  --accent-soft: #263d32;
+  --sel: #263d32;
+  --line: #415248;
+  --text: #edf3ef;
+  --text-dim: #b0c2b6;
+  --text-mute: #9aafa0;
+  --accent: #86caa6;
+  --on-accent: #14251c;
+  --field: #19231e;
+  --field-line: #789083;
+  --track: #1b2320;
+  --thumb: #526a5b;
+  --thumb-hot: #789083;
+  --prio-1: #f49a9f;
+  --prio-2: #e6c578;
+  --prio-3: #86caa6;
+  --prio-1-soft: #452c30;
+  --prio-2-soft: #403923;
+  --prio-3-soft: #263d32;
+  --danger: #f49a9f;
+  --shadow-popover: 0 12px 32px rgb(0 0 0 / 40%);
+  --overlay: rgb(0 0 0 / 52%);
+  /* 深色下图标提亮,次级色比主色更亮(原设计如此),否则阴影层会糊进底色。
+     WCAG 对比度同浅色:主色对底色最低 5.11:1 */
+  --ico-blue: #7cb6ea;
+  --ico-blue-2: #a9d4f7;
+  --ico-cyan: #63d2de;
+  --ico-cyan-2: #9ae8f0;
+  --ico-amber: #ecb95f;
+  --ico-amber-2: #f8d79f;
+  --ico-green: #6fc07c;
+  --ico-green-2: #9adea6;
+  --ico-red: #f0928a;
+  --ico-red-2: #f7b8b0;
+  --ico-gray: #aab8c0;
+  --ico-gray-2: #d2dce2;
+  --ico-violet: #bda9f2;
+  --ico-violet-2: #d8cdf9;
+  --ico-cut: var(--card);
   color-scheme: dark;
 }
 
@@ -114,6 +119,7 @@ body,
 body {
   font-family: 'Segoe UI', 'Microsoft YaHei UI', 'Microsoft YaHei', system-ui, sans-serif;
   font-size: 14px;
+  line-height: 1.45;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
@@ -136,7 +142,7 @@ textarea {
   background: var(--field);
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
-  padding: 6px 10px;
+  padding: 0 8px;
   outline: none;
   user-select: text;
 }
@@ -173,7 +179,7 @@ textarea:disabled {
   cursor: default;
 }
 
-/* 过渡只限不触发布局的三个属性(120ms);低配模式与「减少动态效果」下取消 */
+/* 过渡只限不触发布局的属性(120ms);低配模式与「减少动态效果」下取消 */
 button,
 input,
 select,
@@ -184,7 +190,7 @@ textarea,
   transition:
     border-color 120ms ease,
     background-color 120ms ease,
-    box-shadow 120ms ease;
+    color 120ms ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -192,6 +198,147 @@ textarea,
     transition: none !important;
   }
 }
+
+/* ---------------- 共用控件 ----------------
+   各组件原先各写一份 .btn/.dialog,现在收在这里:一处改,全局一致。
+   组件的 scoped 样式只负责各自布局。 */
+
+/* 按钮:32px 高的默认尺寸,悬停只改颜色/边线,不做位移或缩放 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--field-line);
+  border-radius: var(--radius-control);
+  background: var(--card);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.btn:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+.btn.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+/* 实心 accent 面上的图标必须反色:主体走 on-accent、镂空回填 accent。
+   否则新建按钮(绿底)与看板/列表按下态是绿底绿图标,完全看不见。
+   只覆盖这两处 —— .seg-btn.on 与 .circle.checked 没有 PART 图标(后者走 currentColor 描边) */
+.btn.primary,
+.views .view-btn[aria-pressed='true'] {
+  --ico-cut: var(--accent);
+  --ico-blue: var(--on-accent);
+  --ico-blue-2: var(--on-accent);
+  --ico-cyan: var(--on-accent);
+  --ico-cyan-2: var(--on-accent);
+  --ico-amber: var(--on-accent);
+  --ico-amber-2: var(--on-accent);
+  --ico-green: var(--on-accent);
+  --ico-green-2: var(--on-accent);
+  --ico-red: var(--on-accent);
+  --ico-red-2: var(--on-accent);
+  --ico-gray: var(--on-accent);
+  --ico-gray-2: var(--on-accent);
+  --ico-violet: var(--on-accent);
+  --ico-violet-2: var(--on-accent);
+}
+
+.btn.danger {
+  color: var(--danger);
+  border-color: var(--danger);
+  background: transparent;
+}
+
+.btn.danger:hover:not(:disabled) {
+  background: var(--prio-1-soft);
+}
+
+/* 图标按钮:正方形命中区,视觉仍是 16px 的图标 */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  padding: 0;
+  border-radius: var(--radius-control);
+  color: var(--text-dim);
+}
+
+.icon-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* 浮层:层级由各组件给出(弹窗 100/105/110,菜单 120,提示 200) */
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay);
+}
+
+/* 弹窗:标题与 footer 固定,只有 .dialog-body 滚动 */
+.dialog {
+  display: flex;
+  flex-direction: column;
+  width: var(--dialog-width, 480px);
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  padding: 20px;
+  gap: 16px;
+  border-radius: var(--radius-dialog);
+  background: var(--card);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow-popover);
+}
+
+/* 唯一纵向滚动区。tabindex="0" 让纯文本正文也能被键盘进入(WebView2 109 不会自动给滚动区焦点) */
+.dialog-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.dialog .foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.dialog .foot .spacer {
+  flex: 1 1 auto;
+}
+
+/* 屏幕阅读器专用文本(仍可被读屏读到,视觉上不占位) */
+.vh {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------------- 滚动条 ---------------- */
 
 ::-webkit-scrollbar {
   width: 10px;
@@ -221,12 +368,5 @@ textarea,
 .overdue {
   color: var(--danger);
   font-weight: 600;
-  margin-left: 6px;
   white-space: nowrap;
-}
-
-/* 低配模式（main.ts 自动判定）：卡片阴影是唯一按项重复的合成开销，关掉；
-   html 前缀提升特指度(0,2,1 > scoped 的 0,2,0)，卡片本身还有 1px 边线，视觉不塌。 */
-html[data-perf='low'] [data-card] {
-  box-shadow: none;
 }

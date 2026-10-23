@@ -22,38 +22,39 @@ function onAction(): void {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 54px;
+  bottom: 48px;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 18px;
+  gap: 12px;
+  padding: 8px 14px;
+  max-width: min(560px, calc(100vw - 32px));
   border-radius: var(--radius-card);
-  background: var(--text);
-  color: var(--bg);
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--text);
   font-size: 12px;
   box-shadow: var(--shadow-popover);
   z-index: 200;
-  max-width: 70vw;
 }
 
 .text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .act {
   flex: 0 0 auto;
-  padding: 2px 8px;
-  border-radius: 5px;
-  border: 1px solid currentcolor;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--field-line);
   background: transparent;
   color: var(--accent);
   font-size: 12px;
 }
 
 .act:hover {
-  background: rgb(255 255 255 / 12%);
+  background: var(--hover);
 }
 </style>

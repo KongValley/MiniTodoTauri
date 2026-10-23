@@ -211,6 +211,9 @@ function markClass(kind: 'group' | 'list', id: string): string {
 
 <template>
   <aside class="sidebar" data-testid="sidebar">
+    <div class="brand">迷你待办</div>
+
+    <div class="section-title">任务</div>
     <div class="rail">
       <button
         v-for="v in primaryViews"
@@ -218,20 +221,23 @@ function markClass(kind: 'group' | 'list', id: string): string {
         class="row view-row"
         :class="{ active: isActive(v) }"
         :data-view="v"
+        :aria-current="isActive(v) ? 'page' : undefined"
         @click="setView(v)"
       >
         <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
         <span class="name">{{ VIEW_NAME[v] }}</span>
         <span class="num">{{ countOf(v) }}</span>
       </button>
+    </div>
 
-      <div class="spacer" />
-      <div class="section-title">
-        <span>清单</span>
-        <button class="add" data-testid="sidebar-add-group" title="新建分组" @click="requestNewGroup()">+ 分组</button>
-        <button class="add" data-testid="sidebar-add-list" title="新建清单" @click="onAddList">+ 清单</button>
-      </div>
+    <div class="section-title">
+      <span>我的清单</span>
+      <button class="add" data-testid="sidebar-add-group" title="新建分组" @click="requestNewGroup()">+ 分组</button>
+      <button class="add" data-testid="sidebar-add-list" title="新建清单" @click="onAddList">+ 清单</button>
+    </div>
 
+    <!-- 只有清单树滚动:视图与底部入口始终留在视野里 -->
+    <div class="rail tree thin-scroll">
       <template v-for="entry in listsByGroup" :key="entry.group.id">
         <div
           class="row group-row"
@@ -323,6 +329,7 @@ function markClass(kind: 'group' | 'list', id: string): string {
       </template>
     </div>
 
+    <div class="section-title">归档</div>
     <div class="rail status-rail">
       <template v-for="v in statusViews" :key="v">
         <button
@@ -330,6 +337,7 @@ function markClass(kind: 'group' | 'list', id: string): string {
           class="row view-row"
           :class="{ active: isActive(v) }"
           :data-view="v"
+          :aria-current="isActive(v) ? 'page' : undefined"
           @click="setView(v)"
         >
           <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
@@ -337,7 +345,12 @@ function markClass(kind: 'group' | 'list', id: string): string {
           <span class="num">{{ countOf(v) }}</span>
         </button>
         <div v-else class="row view-row" :class="{ active: isActive(v) }">
-          <button class="row-main" :data-view="v" @click="setView(v)">
+          <button
+            class="row-main"
+            :data-view="v"
+            :aria-current="isActive(v) ? 'page' : undefined"
+            @click="setView(v)"
+          >
             <span class="icon"><Icon :name="VIEW_ICON_NAME[v] as string" /></span>
             <span class="name">{{ VIEW_NAME[v] }}</span>
             <span class="num">{{ countOf(v) }}</span>
@@ -355,6 +368,15 @@ function markClass(kind: 'group' | 'list', id: string): string {
         </div>
       </template>
     </div>
+
+    <div class="rail tools">
+      <button class="btn tool" data-testid="open-settings" title="设置" aria-label="设置" @click="ui.settingsOpen = true">
+        <Icon name="settings" :size="14" />设置
+      </button>
+      <button class="btn tool" data-testid="open-help" title="快捷键" aria-label="快捷键" @click="ui.helpOpen = true">
+        <Icon name="help" :size="14" />快捷键
+      </button>
+    </div>
   </aside>
 </template>
 
@@ -367,34 +389,45 @@ function markClass(kind: 'group' | 'list', id: string): string {
   overflow: hidden;
 }
 
+.brand {
+  display: flex;
+  align-items: center;
+  height: 56px;
+  padding: 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+
 .rail {
-  padding: 10px 8px;
-  overflow-y: auto;
+  padding: 4px 8px;
+}
+
+/* 只有清单树会滚动:视图、归档与底部入口永远可见 */
+.tree {
+  flex: 1 1 auto;
   min-height: 0;
+  overflow-y: auto;
 }
 
 .status-rail {
-  margin-top: auto;
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-}
-
-.spacer {
-  height: 14px;
+  flex: 0 0 auto;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 12px 10px 6px;
+  gap: 4px;
+  padding: 12px 10px 4px;
   color: var(--text-mute);
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
 .section-title .add {
-  min-height: 24px;
-  padding: 0 8px;
+  min-height: 22px;
+  padding: 0 6px;
   border-radius: var(--radius-control);
   font-size: 11px;
   color: var(--text-mute);
@@ -413,9 +446,9 @@ function markClass(kind: 'group' | 'list', id: string): string {
   align-items: center;
   gap: 2px;
   width: 100%;
-  min-height: 40px;
+  height: 32px;
   padding: 0 6px 0 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--text);
 }
 
@@ -423,10 +456,12 @@ function markClass(kind: 'group' | 'list', id: string): string {
   background: var(--hover);
 }
 
+/* 当前视图:底色 + 左侧 accent 标记,不靠加粗撑辨识 */
 .row.active {
   background: var(--accent-soft);
   color: var(--text);
   font-weight: 600;
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 /* 主按钮:名称 + 计数都归它,整行看上去还是一行 */
@@ -436,9 +471,9 @@ function markClass(kind: 'group' | 'list', id: string): string {
   gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
-  min-height: 40px;
+  height: 32px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: inherit;
   text-align: left;
   font: inherit;
@@ -453,7 +488,7 @@ function markClass(kind: 'group' | 'list', id: string): string {
   flex: 0 0 24px;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: 4px;
   color: var(--text-mute);
   opacity: 0;
 }
@@ -476,10 +511,10 @@ function markClass(kind: 'group' | 'list', id: string): string {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  flex: 0 0 24px;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   color: var(--text-dim);
 }
 
@@ -516,22 +551,46 @@ function markClass(kind: 'group' | 'list', id: string): string {
   white-space: nowrap;
 }
 
-/* 计数小胶囊 */
+/* 计数:等宽数字右对齐,不铺大胶囊 —— 一眼比大小,不吃横向空间 */
 .num {
   flex: 0 0 auto;
-  min-width: 22px;
-  padding: 1px 6px;
-  border-radius: 9px;
-  background: var(--card);
+  min-width: 20px;
+  padding-right: 2px;
   color: var(--text-dim);
   font-size: 12px;
   font-weight: 400;
-  text-align: center;
+  text-align: right;
   font-variant-numeric: tabular-nums;
 }
 
 .list-row {
-  padding-left: 24px;
+  padding-left: 22px;
+}
+
+/* 窄窗口(最小 900px):侧栏只有 192px,而行内两个操作钮常年占位(悬停才显形),
+   清单树一旦可滚动还要再让出 10px 滚动条 —— 「内容生产」这种四字名会被截成「内容…」。
+   这里把缩进、内边距与计数字段的预留一起收紧,给名字让出 ~20px。 */
+@media (max-width: 1100px) {
+  .rail {
+    padding: 4px 6px;
+  }
+
+  .row {
+    padding: 0 4px 0 6px;
+  }
+
+  .list-row {
+    padding-left: 18px;
+  }
+
+  .section-title {
+    padding-left: 8px;
+  }
+
+  .num {
+    min-width: 14px;
+    padding-right: 0;
+  }
 }
 
 .dot {
@@ -539,6 +598,23 @@ function markClass(kind: 'group' | 'list', id: string): string {
   height: 8px;
   border-radius: 50%;
   flex: 0 0 8px;
+}
+
+.tools {
+  display: flex;
+  gap: 6px;
+  flex: 0 0 auto;
+  margin-top: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.tools .tool {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0 6px;
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
 .arrow {

@@ -124,14 +124,21 @@ onBeforeUnmount(() => {
 
 .workspace {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 216px minmax(0, 1fr);
   height: 100%;
+}
+
+/* 窄窗口(最小 900px)侧栏收窄,给画布让出宽度 */
+@media (max-width: 1100px) {
+  .workspace {
+    grid-template-columns: 192px minmax(0, 1fr);
+  }
 }
 
 .main {
   display: grid;
   /* TopBar / 快捷录入工具区 / 滚动视图区 / 状态栏 */
-  grid-template-rows: auto auto 1fr auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   min-width: 0;
   /* 作为 .shell 的 grid item,min-height 默认 auto 会被内容撑高,
      导致内部滚动容器(看板列/列表)拿不到可视高度,虚拟滚动无从计算窗口 */

@@ -153,7 +153,7 @@ watch(
 <template>
   <div class="board" data-testid="board" @dragstart="onDragStart" @dragend="onDragEnd" @wheel="onWheel">
     <div v-if="columns.length > 0" class="bar">
-      <span class="bar-title">看板</span>
+      <span class="bar-title">{{ columns.length }} 天</span>
       <span class="spacer" />
       <button class="today" data-testid="board-today" title="滚动到今天" @click="scrollToToday">
         <Icon name="today" :size="13" />今天
@@ -208,12 +208,12 @@ watch(
   flex-direction: column;
 }
 
-/* 看板工具行:标题 + 「今天」快捷滚动,与列头等高(44px),不遮挡内容 */
+/* 看板工具行:日期列数 + 「今天」快捷滚动,压到 32px 不跟内容抢高度 */
 .bar {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
+  height: 32px;
   padding: 0 12px;
   flex: 0 0 auto;
   background: var(--panel);
@@ -222,16 +222,16 @@ watch(
 
 .bar-title {
   font-size: 12px;
-  font-weight: 600;
   color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
 }
 
 .today {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 12px;
-  min-height: 28px;
+  padding: 0 10px;
+  min-height: 26px;
   border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
@@ -267,19 +267,6 @@ watch(
 .empty-actions {
   display: flex;
   gap: 8px;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-  color: var(--text);
-}
-
-.btn:hover {
-  background: var(--hover);
 }
 
 .spacer {

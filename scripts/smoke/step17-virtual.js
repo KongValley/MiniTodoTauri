@@ -71,21 +71,6 @@ hostH.scrollLeft = 0
 await sleep(300)
 truthy(document.querySelector(`[data-column="${cols[0].date}"]`), '横向回到最左后第一天应渲染')
 
-// 每列的竖向滚动在横向来回后仍保留
-const firstCol = document.querySelector(`[data-column="${cols[0].date}"] .content`)
-let scrollKept = null
-if (firstCol && firstCol.scrollHeight > firstCol.clientHeight) {
-  firstCol.scrollTop = 40
-  firstCol.dispatchEvent(new Event('scroll', { bubbles: true }))
-  await sleep(120)
-  hostH.scrollLeft = hostH.scrollWidth
-  await sleep(200)
-  hostH.scrollLeft = 0
-  await sleep(250)
-  const back = document.querySelector(`[data-column="${cols[0].date}"] .content`)
-  scrollKept = back ? Math.abs(back.scrollTop - 40) <= 2 : null
-}
-
 // 看板长列滚到底:末尾不留大片空白(7a)
 // 背景:虚拟行包装 div 无样式时,卡片/组标题的外边距会折叠逃出盒子,测得高度恒少 8~14px。
 // 误差随行数累积,只有足够长的列才看得出来 —— 这里专门造一条 120 张的列。
@@ -126,6 +111,38 @@ assert(
 longSc.scrollTop = 0
 await sleep(200)
 
+/* ---------- 列内竖向滚动记忆:横向移出再回来,位置必须还在 ---------- */
+// 用上面这条 120 张的长列:它一定装得下滚动条,所以不存在「条件不满足就跳过」的情况
+const keepDate = longDate
+const keepBefore = document.querySelector(`[data-column="${keepDate}"] .content`)
+truthy(keepBefore, '长列存在(滚动记忆的前提)')
+keepBefore.scrollTop = 40
+keepBefore.dispatchEvent(new Event('scroll', { bubbles: true }))
+await sleep(200)
+const remembered = keepBefore.scrollTop
+const keepScrollLeft = hostH.scrollLeft
+
+// 横向滚到末端,确认这一列真的被卸载(否则测的是同一个 DOM 节点,证明不了记忆)
+hostH.scrollLeft = hostH.scrollWidth
+await sleep(400)
+eq(
+  document.querySelector(`[data-column="${keepDate}"]`),
+  null,
+  `横向滚到末端后长列已卸载(实际 scrollLeft=${hostH.scrollLeft})`
+)
+
+// 回到原横向位置,列重新挂载后应恢复到记录的滚动位置
+hostH.scrollLeft = keepScrollLeft
+await sleep(400)
+const keepAfter = document.querySelector(`[data-column="${keepDate}"] .content`)
+truthy(keepAfter, '横向回来后长列重新渲染')
+truthy(
+  Math.abs(keepAfter.scrollTop - remembered) <= 2,
+  `列内滚动位置应被记住(期望 ≈${remembered}px,实际 ${keepAfter.scrollTop}px)`
+)
+keepAfter.scrollTop = 0
+await sleep(150)
+
 return {
   modelRows,
   domRowsAtTop,
@@ -133,7 +150,7 @@ return {
   modelCards,
   domCols,
   totalCols: cols.length,
-  scrollKept,
   longCount: modelLong.length,
+  scrollRemembered: remembered,
   tailGap: Math.round(tailGap * 10) / 10
 }

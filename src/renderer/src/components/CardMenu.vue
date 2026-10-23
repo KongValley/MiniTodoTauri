@@ -20,14 +20,22 @@ let trigger: HTMLElement | null = null
 const SAFE = 8
 const pos = ref({ left: 0, top: 0 })
 
-/** 动作收尾:收起菜单并把焦点还给触发控件(打开弹窗的动作不适用——焦点归弹窗) */
+/**
+ * 把焦点同步交还给触发控件。
+ * 打开弹窗的动作(编辑/删除确认)必须在关菜单**之前**调用:useDialogFocus 是在挂载那一刻
+ * 抓 activeElement 作为「关闭后还焦点给谁」,而关菜单会把当前获焦的菜单按钮一起摘掉,
+ * 于是它只能抓到 body,取消后焦点就落到「新建」按钮、丢掉了原来的任务位置。
+ */
+function focusTrigger(back: HTMLElement | null = trigger): void {
+  // 触发控件可能已被移除(动作把它带出了当前视图)或变成了禁用态(无意义) —— 那就别抢焦点
+  if (back && back.isConnected && back !== document.body && !(back as HTMLButtonElement).disabled) back.focus()
+}
+
+/** 动作收尾:收起菜单并把焦点还给触发控件(不涉及弹窗的动作走这里) */
 function closeAndRestore(): void {
   const back = trigger
   closeCardMenu()
-  void nextTick(() => {
-    // 触发控件可能已被移除(动作把它带出了当前视图)或变成了禁用态(无意义) —— 那就别抢焦点
-    if (back && back.isConnected && back !== document.body && !(back as HTMLButtonElement).disabled) back.focus()
-  })
+  void nextTick(() => focusTrigger(back))
 }
 
 /** 用实测尺寸钳制位置,不再猜菜单宽高(猜错就会在右下角被裁) */
@@ -109,10 +117,12 @@ function complete(): void {
 function remove(): void {
   const id = m.value.id
   const purge = ui.view === 'trash'
+  // 先把焦点交回触发控件再关菜单,确认框才抓得到正确的归还目标
+  focusTrigger()
   closeCardMenu()
   askConfirm(
     purge ? '彻底删除' : '移入回收站',
-    purge ? '将彻底删除 1 条任务，无法恢复。' : '将 1 条任务移入回收站。',
+    purge ? `将彻底删除 1 条任务，无法恢复。` : '将 1 条任务移入回收站。',
     () => {
       void mutate((s) => removeTodos(s, [id], purge)).then(() =>
         toast(`已${purge ? '彻底删除' : '移入回收站'} 1 条`, { label: '撤销', run: () => void undoLast() })
@@ -122,8 +132,10 @@ function remove(): void {
 }
 
 function edit(): void {
-  requestEdit(m.value.id)
+  const id = m.value.id
+  focusTrigger()
   closeCardMenu()
+  requestEdit(id)
 }
 
 /** 复制任务:同标题同清单同日期,子任务重置为未完成 */
@@ -235,7 +247,7 @@ watch(item, (v) => {
 
 .menu {
   position: fixed;
-  min-width: 180px;
+  min-width: 224px;
   max-height: calc(100vh - 16px);
   overflow-y: auto;
   padding: 6px;

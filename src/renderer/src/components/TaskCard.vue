@@ -118,13 +118,12 @@ function onCtx(event: MouseEvent): void {
 <style scoped>
 .card {
   display: flex;
-  gap: 10px;
-  padding: 12px 14px;
-  margin-bottom: 10px;
+  gap: 8px;
+  padding: 10px;
+  margin-bottom: 8px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-card);
-  box-shadow: var(--shadow-card);
   cursor: pointer;
   /* 展开钮绝对定位的参照 */
   position: relative;
@@ -232,11 +231,29 @@ function onCtx(event: MouseEvent): void {
 .meta {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 8px;
+  margin-top: 6px;
   font-size: 12px;
   color: var(--text-dim);
   flex-wrap: wrap;
+}
+
+/* 重复任务标记:低饱和胶囊,与列表行同一视觉语言 */
+.repeat {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.subs {
+  padding: 0 5px;
+  border-radius: 8px;
+  background: var(--sel);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 日期与列头重复,压到最弱;真正要看的是清单/优先级/重复 */
@@ -268,22 +285,6 @@ function onCtx(event: MouseEvent): void {
 
 .prio.p3 {
   color: var(--prio-3);
-}
-
-/* 重复任务标记:低饱和胶囊,与列表行同一视觉语言 */
-.repeat {
-  padding: 1px 7px;
-  border-radius: 9px;
-  background: var(--accent-soft);
-  color: var(--text-dim);
-}
-
-.subs {
-  padding: 1px 6px;
-  border-radius: 9px;
-  background: var(--sel);
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
 }
 
 .note {

@@ -35,18 +35,36 @@ truthy(
 const shapes = new Set(viewIcons.map((s) => partsOf(s).map((p) => p.getAttribute('d')).join('|')))
 eq(shapes.size, 8, '8 个视图图标形状互不相同')
 
-// 顶栏四个动作按钮都带图标(此前只有搜索钮有图标)
-for (const id of ['new-task', 'toggle-board', 'open-settings', 'open-help']) {
-  truthy(document.querySelector(`[data-testid="${id}"] svg`), `顶栏 ${id} 按钮带图标`)
+// 顶栏与侧栏的动作按钮都带图标
+for (const id of ['new-task', 'view-board', 'view-list', 'open-settings', 'open-help']) {
+  truthy(document.querySelector(`[data-testid="${id}"] svg`), `动作按钮 ${id} 带图标`)
 }
 
+// 实心底上的图标必须与底色异色(反白)。回归防护:图标主色曾被塌缩成 --accent,
+// 于是「新建」与看板/列表按下态变成绿底绿图标,肉眼看不见。
+// 必须走 getComputedStyle 取解析值 —— 源码里 fill 是 var(--ico-blue) 字符串,getAttribute 比不出来
+const assertIconVisible = (btn, label) => {
+  const path = btn?.querySelector('svg path')
+  truthy(path, `${label} 有 path 部件`)
+  const fill = getComputedStyle(path).fill
+  const bg = getComputedStyle(btn).backgroundColor
+  truthy(fill && fill !== 'none' && bg, `${label} 取到图标色与底色 (${fill} / ${bg})`)
+  truthy(fill !== bg, `${label} 图标不能与按钮底色同色`)
+}
+assertIconVisible(document.querySelector('[data-testid="new-task"]'), '新建按钮')
+const pressedView = [...document.querySelectorAll('[data-testid="view-board"], [data-testid="view-list"]')].find(
+  (b) => b.getAttribute('aria-pressed') !== 'false'
+)
+truthy(pressedView, '当前有一个按下的视图按钮')
+assertIconVisible(pressedView, `按下态视图按钮 ${pressedView?.dataset.testid}`)
+
 // 功能图标也是 svg,不再是文本字形
-truthy(document.querySelector('[data-testid="search-toggle"] svg'), '搜索钮是 SVG')
+truthy(document.querySelector('[data-testid="search-input"]'), '搜索框存在')
 
 // 单色描边图标必须真的画出像素:bbox 全为 0 说明路径被拆碎(踩过的坑 ——
 // 把 'M11 4a7 7 0 ...' 按空格 split 会切成语法非法的碎片,svg 元素在但一个像素都不画)
-const strokeIcons = [...document.querySelectorAll('[data-testid="search-toggle"] svg, [data-add] svg')]
-truthy(strokeIcons.length >= 2, '至少取到搜索与列头加号两个描边图标')
+const strokeIcons = [...document.querySelectorAll('[data-add] svg, [data-testid="search-clear"] svg')]
+truthy(strokeIcons.length >= 1, '至少取到一个描边图标')
 for (const s of strokeIcons) {
   const box = [...s.querySelectorAll('path')].reduce(
     (acc, p) => ({ w: Math.max(acc.w, p.getBBox().width), h: Math.max(acc.h, p.getBBox().height) }),
@@ -76,27 +94,25 @@ truthy(row.querySelector('.circle svg'), '列表已完成行圆圈内是 SVG 勾
 // 页面上不应再有旧字形图标
 eq(document.body.textContent.includes('⌕'), false, '不再有 ⌕ 字形')
 
-// 商务 token 真在读(柔和卡片版:成套固定值,浅/深各一份)
+// 主题 token 真的在驱动界面:浅/深切换后 data-theme 与实际生效的背景色都要变,
+// 且两套主题的底色不同(不钉死具体色值 —— 换配色不该让这个步骤红)
 const root = document.documentElement
-const cssVar = (k) => getComputedStyle(root).getPropertyValue(k).trim().toLowerCase()
-eq(cssVar('--accent'), '#4864c0', '浅色 accent 已是柔和品蓝')
-eq(cssVar('--bg'), '#f5f6fa', '浅色背景已是浅灰蓝')
-eq(cssVar('--line'), '#dde3ec', '浅色分隔线已弱化')
-eq(cssVar('--radius-card'), '14px', '卡片圆角 token 已定义')
-truthy(cssVar('--ico-blue').length > 0 && cssVar('--ico-blue-2').length > 0, '图标双色 token 已定义')
+const bgOf = () => getComputedStyle(root).getPropertyValue('--bg').trim().toLowerCase()
+eq(root.dataset.theme, 'light', '初始是浅色主题')
+const lightBg = bgOf()
+truthy(lightBg.length > 0, '浅色主题读到了 --bg')
 
-// 深色下 token 同步切换
 await t.setTheme('dark')
 await sleep(250)
-eq(cssVar('--accent'), '#9fb4ff', '深色 accent 已提亮')
-eq(cssVar('--bg'), '#171b24', '深色背景已是藏青黑')
-eq(cssVar('--ico-blue'), '#6d9df5', '深色图标主色已提亮')
 eq(root.dataset.theme, 'dark', 'data-theme 已切到 dark')
+const darkBg = bgOf()
+truthy(darkBg !== lightBg, `深色主题底色应与浅色不同(${lightBg} vs ${darkBg})`)
+truthy(getComputedStyle(document.body).backgroundColor !== '', '深色下 body 背景已应用')
 
 await t.setTheme('light')
 await sleep(200)
-eq(cssVar('--accent'), '#4864c0', '切回浅色后 accent 复原')
 eq(root.dataset.theme, 'light', 'data-theme 已切回 light')
+eq(bgOf(), lightBg, '切回浅色后底色复原')
 
 // 列表视图:排序箭头 + 优先级旗标同样是 svg
 await sleep(200)

@@ -324,11 +324,9 @@ fn capture_visuals(app: &AppHandle) {
     let Some(win) = app.get_webview_window("main") else {
         return;
     };
-    // 屏幕拷贝要求窗口在前台
-    let _ = win.show();
-    let _ = win.set_focus();
+    // 刻意不 show / set_focus：CDP 截图与窗口是否在前台无关（见 capture_webview_png）
     if !shot_one.is_empty() {
-        let _ = capture_window_to_file(std::path::Path::new(&shot_one));
+        write_png(&win, std::path::Path::new(&shot_one));
         return;
     }
     if shot_dir.is_empty() {
@@ -336,67 +334,127 @@ fn capture_visuals(app: &AppHandle) {
     }
     let dir = std::path::PathBuf::from(&shot_dir);
     let _ = std::fs::create_dir_all(&dir);
-    let _ = capture_window_to_file(&dir.join("01-board-light.png"));
+    write_png(&win, &dir.join("01-board-light.png"));
     let _ = win.eval("window.__todoTest.setBoard(false)");
     std::thread::sleep(Duration::from_millis(500));
-    let _ = capture_window_to_file(&dir.join("02-list-light.png"));
+    write_png(&win, &dir.join("02-list-light.png"));
     let _ = win.eval("window.__todoTest.setTheme('dark')");
     std::thread::sleep(Duration::from_millis(600));
-    let _ = capture_window_to_file(&dir.join("03-list-dark.png"));
+    write_png(&win, &dir.join("03-list-dark.png"));
     let _ = win.eval("window.__todoTest.setBoard(true)");
     std::thread::sleep(Duration::from_millis(600));
-    let _ = capture_window_to_file(&dir.join("04-board-dark.png"));
+    write_png(&win, &dir.join("04-board-dark.png"));
     let _ = win.eval("window.__todoTest.setTheme('light'); window.__todoTest.openNew()");
     std::thread::sleep(Duration::from_millis(600));
-    let _ = capture_window_to_file(&dir.join("05-dialog.png"));
+    write_png(&win, &dir.join("05-dialog.png"));
     let _ = win.eval("window.__todoTest.closeDialog()");
 }
 
-fn capture_window_to_file(out: &std::path::Path) -> Option<()> {
-    let pid = std::process::id();
-    // 用屏幕拷贝（CopyFromScreen）而不是 PrintWindow：WebView2 的内容是合成渲染的，
-    // PrintWindow 抓出来是空白；拷贝前先把窗口置前，避免被其他窗口遮挡。
-    let script = r#"param([int]$TargetPid,[string]$Out)
-Add-Type -AssemblyName System.Drawing
-Add-Type @'
-using System;
-using System.Runtime.InteropServices;
-public class Cap {
-  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
-  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
-  public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+/// 抓渲染层画面：走 WebView2 的 CDP `Page.captureScreenshot`，直接问渲染层要一帧 PNG。
+///
+/// 为什么不用屏幕拷贝：旧实现是 PowerShell `CopyFromScreen`，只能抓屏幕上真实可见的像素，
+/// 于是每次截图都得 `show()` + `set_focus()` 把窗口抢到前台 —— 跑测试时会把用户正在用的
+/// 窗口顶掉；`PrintWindow` 对 WebView2 的合成内容又只能得到空白，没有第三条路。
+/// CDP 截图与窗口是否可见/是否在前台无关，后台跑也不会打断用户。
+#[cfg(windows)]
+fn capture_webview_png<R: tauri::Runtime>(win: &tauri::WebviewWindow<R>) -> Option<Vec<u8>> {
+    use webview2_com::Microsoft::Web::WebView2::Win32::{ICoreWebView2, ICoreWebView2Controller};
+    use webview2_com::CallDevToolsProtocolMethodCompletedHandler;
+
+    // with_webview 的闭包返回 (),结果自己走 channel 带回来
+    let (outer_tx, outer_rx) = std::sync::mpsc::channel::<Option<Vec<u8>>>();
+    let _ = win.with_webview(move |platform: tauri::webview::PlatformWebview| {
+        let result = (|| -> webview2_com::Result<Vec<u8>> {
+            let controller: ICoreWebView2Controller = platform.controller();
+            let core: ICoreWebView2 = unsafe { controller.CoreWebView2() }?;
+            // 带结尾 NUL 的宽字符串：闭包是 'static 的，用 Vec 带着走（PCWSTR 只借用它）
+            let method: Vec<u16> = "Page.captureScreenshot\0".encode_utf16().collect();
+            let params: Vec<u16> = "{\"format\":\"png\"}\0".encode_utf16().collect();
+            let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+            CallDevToolsProtocolMethodCompletedHandler::wait_for_async_operation(
+                Box::new(move |handler| unsafe {
+                    core.CallDevToolsProtocolMethod(
+                        windows::core::PCWSTR(method.as_ptr()),
+                        windows::core::PCWSTR(params.as_ptr()),
+                        &handler,
+                    )?;
+                    Ok(())
+                }),
+                Box::new(move |hr, json| {
+                    let bytes = if hr.is_ok() {
+                        decode_cdp_screenshot(&json)
+                    } else {
+                        Vec::new()
+                    };
+                    let _ = tx.send(bytes);
+                    Ok(())
+                }),
+            )?;
+            Ok(rx.recv().unwrap_or_default())
+        })();
+        if let Err(e) = &result {
+            eprintln!("[smoke] 截图失败: {e:?}");
+        }
+        let _ = outer_tx.send(result.ok());
+    });
+    match outer_rx.recv().ok().flatten() {
+        Some(bytes) if !bytes.is_empty() => Some(bytes),
+        _ => {
+            eprintln!("[smoke] 未取到截图内容");
+            None
+        }
+    }
 }
-'@
-$p = Get-Process -Id $TargetPid
-$h = $p.MainWindowHandle
-if ($h -eq 0) { exit 1 }
-[void][Cap]::SetForegroundWindow($h)
-Start-Sleep -Milliseconds 400
-$r = New-Object Cap+RECT
-[void][Cap]::GetWindowRect($h, [ref]$r)
-$w = $r.Right - $r.Left
-$hh = $r.Bottom - $r.Top
-if ($w -le 0 -or $hh -le 0) { exit 1 }
-$bmp = New-Object System.Drawing.Bitmap($w, $hh)
-$g = [System.Drawing.Graphics]::FromImage($bmp)
-$g.CopyFromScreen($r.Left, $r.Top, 0, 0, (New-Object System.Drawing.Size($w, $hh)))
-$g.Dispose()
-$bmp.Save($Out, [System.Drawing.Imaging.ImageFormat]::Png)
-$bmp.Dispose()
-"#;
-    let path = std::env::temp_dir().join("mini-todo-shot.ps1");
-    std::fs::write(&path, script).ok()?;
-    let out = std::process::Command::new("powershell")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(&path)
-        .arg(pid.to_string())
-        .arg(out)
-        .output()
-        .ok()?;
-    if out.status.success() {
-        Some(())
-    } else {
-        eprintln!("[smoke] 截图失败: {}", String::from_utf8_lossy(&out.stderr).trim());
-        None
+
+#[cfg(not(windows))]
+fn capture_webview_png<R: tauri::Runtime>(_win: &tauri::WebviewWindow<R>) -> Option<Vec<u8>> {
+    None
+}
+
+/// `Page.captureScreenshot` 的结果是 `{"data":"<base64 png>"}`。
+/// 只在冒烟截图这一条路径上用到，几十字节解码器即可，不为一个测试引入 base64 依赖。
+fn decode_cdp_screenshot(json: &str) -> Vec<u8> {
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(json) else {
+        return Vec::new();
+    };
+    let Some(b64) = v.get("data").and_then(|d| d.as_str()) else {
+        return Vec::new();
+    };
+    let val = |c: u8| -> Option<u8> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        })
+    };
+    let mut out = Vec::with_capacity(b64.len() / 4 * 3);
+    let mut acc: u32 = 0;
+    let mut bits = 0;
+    for c in b64.bytes() {
+        if c == b'=' {
+            break;
+        }
+        let Some(v) = val(c) else { continue };
+        acc = (acc << 6) | u32::from(v);
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+        }
+    }
+    out
+}
+
+fn write_png<R: tauri::Runtime>(win: &tauri::WebviewWindow<R>, out: &std::path::Path) {
+    match capture_webview_png(win) {
+        Some(bytes) => {
+            if let Err(e) = std::fs::write(out, bytes) {
+                eprintln!("[smoke] 写截图失败 {}: {e}", out.display());
+            }
+        }
+        None => eprintln!("[smoke] 未取到截图: {}", out.display()),
     }
 }

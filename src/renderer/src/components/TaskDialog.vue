@@ -145,80 +145,111 @@ function removeSub(index: number): void {
         role="dialog"
         aria-labelledby="task-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 720px"
       >
         <h2 id="task-dialog-title" class="dt">{{ isEdit ? '编辑任务' : '新建任务' }}</h2>
 
-        <!-- 表单区独立滚动,footer 永远留在可视区内(长备注/多子任务时不用滚到底找按钮) -->
-        <div class="form-body">
-          <label class="field">
-          <span class="lbl">任务标题</span>
-          <input ref="titleInput" v-model="form.title" data-testid="dlg-title" placeholder="要做什么？" @keydown.enter="onEnterSave" />
-        </label>
-
-        <label class="field">
-          <span class="lbl">备注</span>
-          <textarea v-model="form.note" data-testid="dlg-note" rows="2" />
-        </label>
-
-        <div class="row2">
-          <label class="inline">
-            <input v-model="form.noDate" type="checkbox" data-testid="dlg-nodate" />
-            <span>不排期</span>
-          </label>
-          <input v-model="form.date" type="date" data-testid="dlg-date" :disabled="form.noDate" />
+        <!-- 标题固定在滚动区外:长备注时不必滚到底才看得到自己在编哪条任务 -->
+        <div class="head-field">
+          <label class="vh" for="dlg-title-input">任务标题</label>
+          <input
+            id="dlg-title-input"
+            ref="titleInput"
+            v-model="form.title"
+            class="title-input"
+            data-testid="dlg-title"
+            placeholder="要做什么？"
+            @keydown.enter="onEnterSave"
+          />
         </div>
 
-        <div class="row2">
-          <label class="field">
-            <span class="lbl">清单</span>
-            <select v-model="form.lid" data-testid="dlg-list">
-              <option value="">{{ INBOX_NAME }}</option>
-              <optgroup v-for="entry in listsByGroup" :key="entry.group.id" :label="entry.group.name">
-                <option v-for="l in entry.lists" :key="l.id" :value="l.id">{{ l.name }}</option>
-              </optgroup>
-            </select>
-          </label>
+        <!-- 只有这一块滚动:备注与子任务在左,属性在右,视口不够时上下排 -->
+        <div class="dialog-body">
+          <div class="cols">
+            <div class="col-main">
+              <label class="field">
+                <span class="lbl">备注</span>
+                <textarea v-model="form.note" data-testid="dlg-note" rows="3" />
+              </label>
 
-          <label class="field">
-            <span class="lbl">优先级</span>
-            <select v-model.number="form.prio" data-testid="dlg-prio">
-              <option :value="1">{{ PRIO_NAME[1] }}</option>
-              <option :value="2">{{ PRIO_NAME[2] }}</option>
-              <option :value="3">{{ PRIO_NAME[3] }}</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="row2">
-          <label v-if="isEdit" class="field">
-            <span class="lbl">状态</span>
-            <select v-model.number="form.status" data-testid="dlg-status">
-              <option v-for="s in statusOptions" :key="s" :value="s">{{ STATUS_NAME[s] }}</option>
-            </select>
-          </label>
-
-          <label class="field">
-            <span class="lbl">重复</span>
-            <select v-model="form.repeat" data-testid="dlg-repeat">
-              <option v-for="(name, kind) in REPEAT_NAME" :key="kind" :value="kind">{{ name }}</option>
-            </select>
-          </label>
-        </div>
-
-        <div class="field">
-          <span class="lbl">子任务</span>
-          <div class="subs" data-testid="dlg-subs">
-            <div v-for="(s, i) in form.subtasks" :key="s.id" class="sub-row">
-              <input v-model="s.done" type="checkbox" />
-              <input v-model="s.title" class="sub-title" />
-              <button class="x" @click="removeSub(i)"><Icon name="close" :size="12" /></button>
+              <div class="field">
+                <span class="lbl">子任务</span>
+                <div class="subs" data-testid="dlg-subs">
+                  <div v-for="(s, i) in form.subtasks" :key="s.id" class="sub-row">
+                    <input v-model="s.done" type="checkbox" :aria-label="`完成子任务：${s.title}`" />
+                    <input
+                      v-model="s.title"
+                      class="sub-title"
+                      :aria-label="`子任务名称：${s.title}`"
+                    />
+                    <button class="x" :aria-label="`删除子任务：${s.title}`" @click="removeSub(i)">
+                      <Icon name="close" :size="12" />
+                    </button>
+                  </div>
+                  <div class="sub-row">
+                    <span class="plus"><Icon name="plus" :size="13" /></span>
+                    <input
+                      v-model="newSub"
+                      class="sub-title"
+                      placeholder="添加子任务，回车确认"
+                      aria-label="添加子任务"
+                      @keydown.enter.prevent="onEnterAddSub"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="sub-row">
-              <span class="plus"><Icon name="plus" :size="13" /></span>
-              <input v-model="newSub" class="sub-title" placeholder="添加子任务，回车确认" @keydown.enter.prevent="onEnterAddSub" />
+
+            <div class="col-side">
+              <label class="inline">
+                <input v-model="form.noDate" type="checkbox" data-testid="dlg-nodate" />
+                <span>不排期</span>
+              </label>
+              <label class="field">
+                <span class="lbl">日期</span>
+                <input
+                  v-model="form.date"
+                  type="date"
+                  data-testid="dlg-date"
+                  aria-label="任务日期"
+                  :disabled="form.noDate"
+                />
+              </label>
+
+              <label class="field">
+                <span class="lbl">清单</span>
+                <select v-model="form.lid" data-testid="dlg-list" aria-label="所属清单">
+                  <option value="">{{ INBOX_NAME }}</option>
+                  <optgroup v-for="entry in listsByGroup" :key="entry.group.id" :label="entry.group.name">
+                    <option v-for="l in entry.lists" :key="l.id" :value="l.id">{{ l.name }}</option>
+                  </optgroup>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="lbl">优先级</span>
+                <select v-model.number="form.prio" data-testid="dlg-prio" aria-label="优先级">
+                  <option :value="1">{{ PRIO_NAME[1] }}</option>
+                  <option :value="2">{{ PRIO_NAME[2] }}</option>
+                  <option :value="3">{{ PRIO_NAME[3] }}</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span class="lbl">重复</span>
+                <select v-model="form.repeat" data-testid="dlg-repeat" aria-label="重复规则">
+                  <option v-for="(name, kind) in REPEAT_NAME" :key="kind" :value="kind">{{ name }}</option>
+                </select>
+              </label>
+
+              <label v-if="isEdit" class="field">
+                <span class="lbl">状态</span>
+                <select v-model.number="form.status" data-testid="dlg-status" aria-label="任务状态">
+                  <option v-for="s in statusOptions" :key="s" :value="s">{{ STATUS_NAME[s] }}</option>
+                </select>
+              </label>
             </div>
           </div>
-        </div>
         </div>
 
         <div class="foot">
@@ -237,40 +268,38 @@ function removeSub(index: number): void {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 100;
 }
 
-.dialog {
-  width: 520px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
-/* 只有表单区滚动:标题与按钮永远在看得见的地方 */
-.form-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
 .dt {
-  margin: 0 0 16px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
+}
+
+/* 标题固定:长备注时不必滚到底才知道在编哪条 */
+.head-field input {
+  width: 100%;
+  height: 36px;
+  font-size: 15px;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 20px;
+}
+
+/* 窄窗口(最小 900px 减去侧栏后更窄)排不下两列,上下堆 */
+@media (max-width: 760px) {
+  .cols {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+}
+
+.col-side .field:first-of-type {
+  margin-top: 12px;
 }
 
 .field {
@@ -289,33 +318,21 @@ function removeSub(index: number): void {
 .field select,
 .field textarea {
   width: 100%;
+  min-height: 32px;
   resize: vertical;
-}
-
-.row2 {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  margin-bottom: 12px;
-}
-
-.row2 .field {
-  flex: 1 1 0;
-  margin-bottom: 0;
 }
 
 .inline {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-bottom: 6px;
   white-space: nowrap;
 }
 
 .subs {
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
-  padding: 6px;
+  padding: 4px;
   background: var(--field);
 }
 
@@ -323,22 +340,24 @@ function removeSub(index: number): void {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
+  min-height: 32px;
 }
 
 .sub-title {
   flex: 1 1 auto;
+  min-width: 0;
   border: none;
   background: none;
-  padding: 3px 4px;
 }
 
 .sub-title:focus {
   border: none;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .plus {
-  width: 15px;
+  width: 16px;
   text-align: center;
   color: var(--text-mute);
   display: inline-flex;
@@ -347,68 +366,18 @@ function removeSub(index: number): void {
 }
 
 .x {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: var(--radius-control);
   color: var(--text-mute);
-  padding: 0 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
 .x:hover {
-  color: var(--danger);
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
-  flex: 0 0 auto;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-}
-
-.btn:hover:not(:disabled) {
   background: var(--hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
-.btn.danger {
   color: var(--danger);
-  border-color: var(--danger);
-}
-
-.btn.primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-card);
-}
-
-.btn.danger {
-  color: var(--danger);
-}
-
-.btn.danger:hover {
-  border-color: var(--danger);
 }
 </style>

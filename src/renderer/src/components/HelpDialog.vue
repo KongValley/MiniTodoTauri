@@ -45,16 +45,20 @@ const ROWS: [string, string][] = [
         role="dialog"
         aria-labelledby="help-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 600px"
       >
         <h2 id="help-dialog-title">快捷键</h2>
-        <table>
-          <tbody>
-            <tr v-for="[key, desc] in ROWS" :key="key">
-              <td class="k"><kbd>{{ key }}</kbd></td>
-              <td class="d">{{ desc }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <!-- 纯文本滚动区必须显式可聚焦:WebView2 109 不会给无子控件的滚动区自动焦点 -->
+        <div class="dialog-body" tabindex="0" role="region" aria-label="快捷键列表">
+          <table>
+            <tbody>
+              <tr v-for="[key, desc] in ROWS" :key="key">
+                <td class="k"><kbd>{{ key }}</kbd></td>
+                <td class="d">{{ desc }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
         <div class="foot">
           <span class="spacer" />
           <button class="btn" data-testid="help-close" @click="ui.helpOpen = false">关闭</button>
@@ -66,30 +70,12 @@ const ROWS: [string, string][] = [
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 100;
 }
 
-.dialog {
-  width: 520px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
 h2 {
-  margin: 0 0 16px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -99,7 +85,7 @@ table {
 }
 
 td {
-  padding: 5px 0;
+  padding: 3px 0;
   vertical-align: top;
 }
 
@@ -109,7 +95,7 @@ td {
 
 kbd {
   display: inline-block;
-  padding: 3px 8px;
+  padding: 2px 7px;
   border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--panel);
@@ -119,27 +105,5 @@ kbd {
 
 .d {
   color: var(--text-dim);
-  line-height: 1.5;
-}
-
-.foot {
-  display: flex;
-  margin-top: 16px;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-}
-
-.btn:hover {
-  background: var(--hover);
 }
 </style>

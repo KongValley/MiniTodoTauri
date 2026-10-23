@@ -16,9 +16,12 @@ const a = await t.newTask({ title: '原始任务', date: todayStr, prio: 1, lid:
 await t.flush()
 t.setBoard(false)
 t.setView('all')
-await sleep(200)
-
+// 必须等列表真的把行渲染出来再选:ListView 挂载时会 clearSelection(),
+// 固定 sleep 碰上慢机器就会在选中之后被挂载清掉,后面 Ctrl+D 自然复制不出东西
 const rowOf = (id) => document.querySelector(`[data-row="${id}"]`)
+for (let i = 0; i < 60 && !rowOf(a.id); i++) await sleep(50)
+truthy(!!rowOf(a.id), '列表已渲染出该行')
+
 const openMenu = async (id) => {
   rowOf(id).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 40, clientY: 40 }))
   await sleep(120)

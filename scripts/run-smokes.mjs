@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const appExe =
   process.env.TODO_APP_EXE ||
-  join(root, 'src-tauri', 'target', 'x86_64-pc-windows-msvc', 'release', 'mini-todo.exe')
+  join(root, 'src-tauri', 'target', 'i686-pc-windows-msvc', 'release', 'mini-todo.exe')
 const tmpDir = join(root, 'tmp')
 mkdirSync(tmpDir, { recursive: true })
 
@@ -54,12 +54,13 @@ const scripts = [
   'step38-export.js',
   'step39-keynav.js',
   'step40-quick-add.js',
-  'step41-task-filter.js'
+  'step41-task-filter.js',
+  'step42-ui-rewrite.js'
 ]
 
 if (!existsSync(appExe)) {
   console.error(
-    `缺少应用二进制 ${appExe}\n先运行：npm run build && cargo build --release --locked --target x86_64-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`
+    `缺少应用二进制 ${appExe}\n先运行：npm run build && cargo build --release --locked --target i686-pc-windows-msvc --manifest-path src-tauri/Cargo.toml`
   )
   process.exit(1)
 }

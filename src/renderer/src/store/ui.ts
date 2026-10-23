@@ -43,7 +43,6 @@ export interface MetaState {
 export const ui = reactive({
   view: 'week7' as ViewKey,
   search: '',
-  searchOpen: false,
   board: true,
   dialog: null as TaskDialogState | null,
   /** 分组/清单新建与重命名弹窗;null = 关闭 */

@@ -71,6 +71,7 @@ function save(): void {
         role="dialog"
         aria-labelledby="meta-dialog-title"
         :aria-modal="isTopmost ? 'true' : undefined"
+        style="--dialog-width: 440px"
       >
         <h2 id="meta-dialog-title" class="dt">{{ title }}</h2>
 
@@ -115,30 +116,12 @@ function save(): void {
 
 <style scoped>
 .overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--overlay);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   z-index: 100;
 }
 
-.dialog {
-  width: 420px;
-  max-width: calc(100vw - 48px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
-  padding: 24px;
-  border-radius: var(--radius-dialog);
-  background: var(--card);
-  border: 1px solid var(--line);
-  box-shadow: var(--shadow-popover);
-}
-
 .dt {
-  margin: 0 0 16px;
-  font-size: 18px;
+  margin: 0;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -157,6 +140,7 @@ function save(): void {
 .field input,
 .field select {
   width: 100%;
+  min-height: 32px;
 }
 
 .swatches {
@@ -175,44 +159,5 @@ function save(): void {
 
 .sw.on {
   border-color: var(--text);
-  box-shadow: 0 0 0 2px var(--card) inset;
-}
-
-.foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.spacer {
-  flex: 1 1 auto;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 16px;
-  border-radius: var(--radius-control);
-  border: 1px solid var(--field-line);
-  background: var(--card);
-}
-
-.btn:hover:not(:disabled) {
-  background: var(--hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
-.btn.primary:hover:not(:disabled) {
-  box-shadow: var(--shadow-card);
 }
 </style>

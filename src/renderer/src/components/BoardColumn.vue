@@ -53,8 +53,9 @@ const rows = computed<Row[]>(() => {
   return out
 })
 
-/** 估算:卡片本体约 96px(两行标题 + meta + 上下 padding),带组标题再加 32px */
-const CARD_ESTIMATE = 96
+/** 估算:卡片本体约 84px(两行标题 + meta + padding),带组标题再加 32px。
+ *  初值只用于首帧占位,挂载后由 measureAll() 批量校正 */
+const CARD_ESTIMATE = 84
 const HEAD_ESTIMATE = 32
 const estimateOf = (r: Row): number => CARD_ESTIMATE + (r.head ? HEAD_ESTIMATE : 0)
 
@@ -251,38 +252,31 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 44px;
-  padding: 0 12px;
+  height: 40px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--line);
   background: var(--panel);
   flex: 0 0 auto;
 }
 
 .date {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
-/* 数量胶囊:与卡片里的「子任务」标记同一视觉语言 */
+/* 数量:等宽数字,不铺胶囊 —— 列头窄,横向空间要留给日期 */
 .count {
-  min-width: 22px;
-  padding: 1px 6px;
-  border-radius: 9px;
-  background: var(--card);
   color: var(--text-dim);
   font-size: 12px;
-  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
 .add {
   margin-left: auto;
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: var(--radius-control);
   color: var(--text-dim);
-  font-size: 15px;
-  line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -293,11 +287,11 @@ watch(
   color: var(--accent);
 }
 
-/* 列内留白:卡片间距 10px(margin-bottom) + 12px 内边距,列与列之间不再额外加 margin */
+/* 列内留白:卡片间距 8px(margin-bottom) + 10px 内边距,列与列之间不再额外加 margin */
 .content {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 12px;
+  padding: 10px;
   min-height: 0;
 }
 
@@ -307,10 +301,13 @@ watch(
   display: flow-root;
 }
 
+/* 优先级组头固定 28px —— BoardColumn 的 HEAD_ESTIMATE 按这个值估算初始高度 */
 .group-head {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  margin: 6px 2px 8px;
+  height: 28px;
+  margin-bottom: 4px;
   font-size: 12px;
   color: var(--text-dim);
 }

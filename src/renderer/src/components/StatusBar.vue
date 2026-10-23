@@ -47,9 +47,10 @@ async function openDataDir(): Promise<void> {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
-  padding: 6px 20px;
+  min-height: 30px;
+  padding: 4px 16px;
   border-top: 1px solid var(--line);
   background: var(--status);
   color: var(--text-dim);
@@ -59,8 +60,8 @@ async function openDataDir(): Promise<void> {
 .dir {
   flex: 0 1 auto;
   min-width: 0;
-  min-height: 26px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 8px;
   border-radius: var(--radius-control);
   border: 1px solid var(--field-line);
   background: var(--card);
@@ -85,6 +86,7 @@ async function openDataDir(): Promise<void> {
   flex: 0 0 auto;
   color: var(--text);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* 保存失败不可被省略号吃掉:宁愿换行也要看全 */
@@ -96,14 +98,15 @@ async function openDataDir(): Promise<void> {
 }
 
 .hint {
-  flex: 0 1 auto;
+  flex: 0 0 auto;
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .snooze {
   flex: 0 0 auto;
-  min-height: 26px;
-  padding: 0 10px;
+  min-height: 24px;
+  padding: 0 8px;
   border: 1px solid var(--field-line);
   border-radius: var(--radius-control);
   background: var(--card);
