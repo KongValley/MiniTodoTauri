@@ -312,7 +312,7 @@ gh release create webview2-109 --title "WebView2 109 固定版运行时源" --no
 | 方式 | 操作 |
 | --- | --- |
 | 网页触发 | Actions → release → Run workflow，填版本号（留空取 `package.json`）；`publish=false` 可只验证构建不发布 |
-| 打 tag | `node scripts/sync-version.mjs 1.2.0 && git commit -am "chore: 1.2.0" && git tag v1.2.0 && git push origin main v1.2.0`（tag 与 package.json 版本不一致会直接拒绝发布） |
+| 打 tag | `node scripts/sync-version.mjs 1.3.0 && git commit -am "chore: 1.3.0" && git tag v1.3.0 && git push origin main v1.3.0`（tag 与 package.json 版本不一致会直接拒绝发布） |
 
 流水线做的事：`npm ci` → 下载 x86 `.msu` 与 WebView2 运行时压缩包 → `node scripts/sync-version.mjs <版本>`（同步写 package.json 与 tauri.conf.json）→ `node scripts/package-win.mjs win7-ia32` → 汇总成 Release 资产：**1 个安装版 exe** + **1 个绿色版 zip** + **4 个 x86 `.msu`** + **1 份 `win7-patches-readme.txt`**，共 7 个。tag 已存在时会先删旧 Release 再重建，方便重跑。
 
